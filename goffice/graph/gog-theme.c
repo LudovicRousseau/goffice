@@ -1,5 +1,5 @@
 /*
- * gog-theme.c :
+ * gog-theme.c:
  *
  * Copyright (C) 2003-2004 Jody Goldberg (jody@gnome.org)
  * Copyright (C) 2010 Jean Brefort (jean.brefort@normalesup.org)
@@ -194,8 +194,8 @@ struct _GogTheme {
 	GOStyle	*default_style;
 	GPtrArray	*palette;
 	GogAxisColorMap *cm, *dcm; /* cm: color map for color axis, dcm stands for discrete color map */
-	gboolean built_color_map; /* TRUE if color map is built from the palette */
-	gboolean writeable; /* TRUE if theme can be edited */
+	gboolean built_color_map; /* %TRUE if color map is built from the palette */
+	gboolean writeable; /* %TRUE if theme can be edited */
 	char		*path; /* file path if any */
 };
 
@@ -888,7 +888,7 @@ gog_theme_find_element (GogTheme const *theme, GogObject const *obj)
 }
 
 /**
- * gog_theme_fillin_style :
+ * gog_theme_fillin_style:
  * @theme: #GogTheme
  * @style: #GOStyle to initialize
  * @obj: #GogObject The object associated with @style
@@ -985,7 +985,7 @@ gog_theme_get_name (GogTheme const *theme)
  * gog_theme_get_descrition:
  * @theme: a #GogTheme
  *
- * Returns: the localized GogTheme decription.
+ * Returns: the localized GogTheme description.
  **/
 
 char const *
@@ -1312,7 +1312,7 @@ build_predefined_themes (void)
 	style->line.width = 0; /* hairline */
 	style->line.color = GO_COLOR_BLACK;
 	style->fill.type = GO_STYLE_FILL_PATTERN;
-	/* FIXME : not really true, will want to split area from line */
+	/* FIXME: not really true, will want to split area from line */
 	gog_theme_add_element (theme, style,
 		map_area_series_solid_default,  g_strdup ("GogSeries"), NULL);
 
@@ -1496,7 +1496,7 @@ build_predefined_themes (void)
 	style->line.color = GO_COLOR_BLACK;
 	style->fill.type = GO_STYLE_FILL_PATTERN;
 	go_pattern_set_solid (&style->fill.pattern, GO_COLOR_GREY (0x20));
-	/* FIXME : not really true, will want to split area from line */
+	/* FIXME: not really true, will want to split area from line */
 	gog_theme_add_element (theme, style,
 		map_area_series_solid_guppi,  g_strdup ("GogSeries"), NULL);
 

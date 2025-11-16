@@ -30,6 +30,7 @@
 #include <cairo-svg.h>
 #include <string.h>
 
+#ifdef GOFFICE_WITH_LIBRSVG
 #include <librsvg/rsvg.h>
 #ifdef LIBRSVG_CHECK_VERSION
 #define NEEDS_LIBRSVG_CAIRO_H !LIBRSVG_CHECK_VERSION(2,36,2)
@@ -39,6 +40,7 @@
 #if NEEDS_LIBRSVG_CAIRO_H
 #include <librsvg/rsvg-cairo.h>
 #endif
+#endif /* GOFFICE_WITH_LIBRSVG */
 
 struct _GOComponentPrivate {
 	gboolean is_inline; /* if set, the object will be displayed in compact mode
@@ -285,6 +287,7 @@ go_component_snapshot_render (GOComponent *component, cairo_t *cr,
 {
 	GOComponentSnapshot *snapshot = (GOComponentSnapshot *) component;
 	switch (component->snapshot_type) {
+#ifdef GOFFICE_WITH_LIBRSVG
 	case GO_SNAPSHOT_SVG:
 		/* NOTE: we might use lasem here, and also use a GOSvg image */
 		if (snapshot->image == NULL) {
@@ -312,6 +315,7 @@ go_component_snapshot_render (GOComponent *component, cairo_t *cr,
 			cairo_restore (cr);
 		}
 		break;
+#endif /* GOFFICE_WITH_LIBRSVG */
 	case GO_SNAPSHOT_PNG: {
 		if (snapshot->image == NULL) {
 			GInputStream *in = g_memory_input_stream_new_from_data (
@@ -506,7 +510,7 @@ editor_destroy_cb (GOComponent *component)
  * @component: #GOComponent
  *
  * Opens a top level window editor for the component if it can be edited.
- * Returns: (transfer none): the editor window or NULL
+ * Returns: (transfer none): the editor window or %NULL
  */
 GtkWindow *
 go_component_edit (GOComponent *component)
@@ -947,10 +951,6 @@ GOComponent *
 go_component_duplicate (GOComponent const *component)
 {
 	GOComponent *res;
-	char *buf;
-	int length;
-	void (*clearfunc) (gpointer) = NULL;
-	gpointer user_data = NULL;
 	GValue	 value;
 	guint i, nbprops;
 	GType    prop_type;
@@ -975,14 +975,10 @@ go_component_duplicate (GOComponent const *component)
 			g_value_unset (&value);
 		}
 	/* and now the data */
-	go_component_get_data ((GOComponent *) component, (gpointer) &buf, &length, &clearfunc, &user_data);
-	new_data = g_malloc (length);
-	memcpy (new_data, buf, length);
-	go_component_set_data (res, new_data, length);
+	new_data = go_memdup (component->data, component->length);
+	go_component_set_data (res, new_data, component->length);
 	res->destroy_notify = g_free;
 	res->destroy_data = new_data;
-	if (clearfunc)
-		clearfunc ((user_data)? user_data: buf);
 	res->priv = g_new (GOComponentPrivate, 1);
 	res->priv->is_inline = component->priv->is_inline;
 	return res;

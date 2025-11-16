@@ -1,13 +1,13 @@
 >-*- mode: m4 -*-
 dnl We require Automake 1.7.2, which requires Autoconf 2.54.
 dnl (It needs _AC_AM_CONFIG_HEADER_HOOK, for example.)
-AC_PREREQ(2.54)
+AC_PREREQ([2.54])
 AC_CONFIG_MACRO_DIR([m4])
 AX_IS_RELEASE([git-directory])
 
 m4_define([goffice_version_epoch], [0])
 m4_define([goffice_version_major], [10])
-m4_define([goffice_version_minor], [46])
+m4_define([goffice_version_minor], [60])
 m4_define([goffice_version_extra], [])
 m4_define([goffice_full_version],
 	  [goffice_version_epoch.goffice_version_major.goffice_version_minor[]goffice_version_extra])
@@ -16,8 +16,7 @@ dnl Emphasize some of the checks.
 m4_define([BIG_CHECKING], [AC_MSG_CHECKING([
 ======== $1])])
 
-AC_INIT([goffice], [goffice_full_version],
-	[https://gitlab.gnome.org/GNOME/goffice/issues])
+AC_INIT([goffice],[goffice_full_version],[https://gitlab.gnome.org/GNOME/goffice/issues])
 
 AC_CONFIG_SRCDIR(goffice/goffice.h)
 AM_INIT_AUTOMAKE([dist-bzip2])
@@ -78,20 +77,19 @@ AM_MAINTAINER_MODE([enable])
 
 m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 
-dnl We need intltool >= 0.35.0 to use the LINGUAS file in the po dir 
+dnl We need intltool >= 0.35.0 to use the LINGUAS file in the po dir
 IT_PROG_INTLTOOL([0.35.0])
 
 dnl We use $host_os:
 AC_CANONICAL_HOST
 
-AC_ISC_POSIX
-AC_PROG_CC
 AC_PROG_CC_C99
+AC_PROG_CC
 if test "$ac_cv_prog_cc_c99" = no; then
 	AC_MSG_ERROR([*** c99 is required])
 fi
 AC_PROG_LN_S
-AC_HEADER_STDC
+
 AC_SYS_LARGEFILE
 
 LT_PREREQ([2.2.6])
@@ -126,7 +124,6 @@ goffice_reqs="
 	pango			>= 1.24.0
 	pangocairo		>= 1.24.0
 	cairo			>= 1.10.0
-	librsvg-2.0		>= 2.22.0
 	gdk-pixbuf-2.0	>= 2.22.0
 	libxslt
 "
@@ -153,7 +150,7 @@ goffice_with_lasem=false
 lasem=
 for ver in 0.6 0.4 ; do
   if test "x$lasem" = x; then
-    if pkg-config --exists lasem-$ver; then
+    if $PKG_CONFIG --exists lasem-$ver; then
       lasem=lasem-$ver
     fi
   fi
@@ -351,6 +348,19 @@ case $with_config_backend in
 		;;
 esac
 
+dnl ***********************
+dnl Should we use librsvg ?
+dnl ***********************
+AC_ARG_WITH(librsvg,
+	AS_HELP_STRING([--without-librsvg],[Build without SVG support]))
+if ! test "x$with_librsvg" = xno; then
+	goffice_reqs="$goffice_reqs librsvg-2.0 >= 2.22.0"
+	EXTRA_DEPS="$EXTRA_DEPS librsvg-2.0"
+	AC_DEFINE(GOFFICE_WITH_LIBRSVG, 1, [Define if librsvg is used])
+fi
+AM_CONDITIONAL(WITH_LIBRSVG, [! test "x$with_librsvg" = xno])
+
+
 dnl *******************
 dnl Should we use gtk ?
 dnl *******************
@@ -385,26 +395,6 @@ dnl ****************************
 
 PKG_CHECK_MODULES(GOFFICE, $goffice_reqs)
 
-dnl  Checks for Xft/XRender
-have_xrender=no
-xrender_libs="-lXrender -lXext"
-AC_CHECK_LIB(Xrender, XRenderFindFormat, 
-	[have_xrender=yes
-	 dnl See if we really need that -lXext
-	 AC_CHECK_LIB(Xrender, XRenderQueryVersion,
-		      [xrender_libs="-lXrender"],
-		      [],
-		      [])],
-	[],
-	[-lXext])
-if test $have_xrender = yes; then
-  AC_SUBST(RENDER_LIBS, $xrender_libs)
-  AC_DEFINE(HAVE_RENDER, 1, [Define if libXrender is available.])
-else
-  AC_SUBST(RENDER_LIBS, "")
-fi
-unset xrender_libs
-
 dnl *****************************
 dnl FIXME: perhaps declare with AC_ARG_VAR?
 dnl	   If we use the initial value of a variable, we have to make it precious.
@@ -420,7 +410,8 @@ dnl below.
 AC_SUBST(GETTEXT_PACKAGE, goffice-${VERSION})
 AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE, "$GETTEXT_PACKAGE",
 	[The package name, for gettext])
-AM_GLIB_GNU_GETTEXT
+AM_GNU_GETTEXT_VERSION([0.13])
+AM_GNU_GETTEXT([external])
 
 dnl ****************************
 dnl prep the pixmap generator
@@ -454,7 +445,7 @@ if test "$GCC" = yes -a "x$set_more_warnings" != xno; then
 	warning_options="-Wall -Werror=init-self -Werror=missing-include-dirs \
 			 -Wsign-compare -Werror=pointer-arith \
 			 -Wchar-subscripts -Wwrite-strings \
-			 -Wdeclaration-after-statement -Wnested-externs \
+			 -Wnested-externs \
 			 -Wmissing-noreturn \
 			 -Werror=missing-prototypes -Werror=nested-externs \
 			 -Werror=implicit-function-declaration \
@@ -581,18 +572,27 @@ GOFFICE_CHECK_FUNC(asinh)
 GOFFICE_CHECK_FUNC(acosh)
 GOFFICE_CHECK_FUNC(atanh)
 
+AC_TYPE_LONG_DOUBLE
+dnl go-ryu needs __uint128_t for long double support.
+AC_CHECK_TYPES([__uint128_t], [], [], [[#include <inttypes.h>
+#include <stdint.h>]])
+if test $ac_cv_type_long_double.$ac_cv_type___uint128_t = yes.yes; then
+  with_long_double_default=yes
+else
+  with_long_double_default=no
+fi
+
 float_msg=no
 AC_ARG_WITH(long-double,
         [  --without-long-double   disable support for long double],
-        , [ with_long_double=yes])
+        , [ with_long_double=$with_long_double_default])
 
 if test "x$with_long_double" = "xyes"; then
-  AC_TYPE_LONG_DOUBLE
-  if test $ac_cv_type_long_double = yes; then
+  if test $with_long_double_default = yes; then
     have_mandatory_funcs=yes
     need_sunmath=0
     ss_ccprog=`echo $CC | sed -e 's/ .*//'`
-    ss_cc=`which $ss_ccprog`
+    ss_cc=`command -v $ss_ccprog`
     ss_dir=`dirname "$ss_cc"`"/.."
     if test ! -f "$ss_dir/lib/libsunmath.so"; then
         ss_dir="/opt/SUNWspro"
@@ -652,7 +652,7 @@ if test "x$with_long_double" = "xyes"; then
 			   [Define if GOffice supplies strtold.])
 		],
 		[AC_MSG_RESULT(assuming not)])
-    else 
+    else
 	AC_DEFINE([GOFFICE_SUPPLIED_STRTOLD], 1,
 		  [Define if GOffice supplies strtold.])
 	AC_CHECK_FUNCS(string_to_decimal decimal_to_quadruple)
@@ -672,6 +672,26 @@ if test "x$with_long_double" = "xyes"; then
     unset have_mandatory_funcs
   fi
 fi
+
+decimal_msg=no
+goffice_with_decimal64=false
+AC_ARG_WITH(decimal64,
+        [  --without-decimal64   disable support for decimal64],
+        , [ with_decimal64=no])
+AC_MSG_CHECKING([if Decimal64 support is requested])
+if test "x$with_decimal64" = "xyes"; then
+  AC_MSG_RESULT(yes)
+  AC_CHECK_TYPES([_Decimal64], [], [AC_MSG_ERROR([_Decimal64 type required])], [])
+  AC_CHECK_TYPES([struct printf_info], [], [AC_MSG_ERROR([printf hook support is required])], [[#include <printf.h>]])
+  goffice_with_decimal64=true
+  decimal_msg="yes (Decimal64)"
+  AC_DEFINE([GOFFICE_WITH_DECIMAL64], 1,
+	    [Define if GOffice supports Decimal64.])
+else
+  AC_MSG_RESULT(no)
+fi
+AM_CONDITIONAL(GOFFICE_WITH_DECIMAL64, $goffice_with_decimal64)
+
 AC_SUBST(EXTRA_LIBS)
 AC_SUBST(EXTRA_INCLUDES)
 AC_SUBST(EXTRA_DEPS)
@@ -680,7 +700,7 @@ SAVE_CFLAGS=$CFLAGS
 SAVE_LIBS=$LIBS
 CFLAGS="$CFLAGS $GOFFICE_CFLAGS"
 LIBS="$GOFFICE_LIBS $LIBS"
-AC_CHECK_FUNCS(gtk_widget_class_set_css_name)
+AC_CHECK_FUNCS(g_file_info_get_modification_date_time gtk_widget_class_set_css_name gdk_display_get_monitor_at_window)
 CFLAGS=$SAVE_CFLAGS
 LIBS=$SAVE_LIBS
 
@@ -688,7 +708,7 @@ LIBS=$SAVE_LIBS
 GIR_REQ=1.0.0
 AC_ARG_ENABLE(introspection,
           AS_HELP_STRING([--enable-introspection[=@<:@no/auto/yes@:>@]],
-                         [Enable introspection for this build]),, 
+                         [Enable introspection for this build]),,
                          [enable_introspection=no])
 
 AC_MSG_CHECKING([for gobject-introspection])
@@ -711,7 +731,7 @@ AS_CASE([$enable_introspection],
 dnl Canonicalize enable_introspection
 enable_introspection=$found_introspection
 ],
-[	
+[
     AC_MSG_ERROR([invalid argument passed to --enable-introspection, should be one of @<:@no/auto/yes@:>@])
 ])
 
@@ -796,7 +816,7 @@ dnl These are changed in goffice.c for WIN32 packages
 AC_SUBST(goffice_datadir, '${datadir}/goffice/${VERSION}')
 AC_SUBST(goffice_libdir, '${libdir}/goffice/${VERSION}')
 AC_SUBST(goffice_icondir, '${datadir}/pixmaps/goffice/${VERSION}')
-AC_SUBST(goffice_localedir, '${prefix}/${DATADIRNAME}/locale')
+AC_SUBST(goffice_localedir, '${localedir}')
 dnl
 AC_SUBST(goffice_plugindir, '${goffice_libdir}/plugins')
 AC_SUBST(goffice_externplugindir, '${libdir}/goffice/${GOFFICE_API_VER}/plugins')
@@ -852,6 +872,7 @@ Configuration:
 	Compiler:		${CC}
 	Compiler flags:		${CFLAGS}
 	Long double support:	${float_msg}
+	Decimal support:	${decimal_msg}
 	Equation support in graphs: ${found_lasem}
 
 	UI:			${ui_msg}

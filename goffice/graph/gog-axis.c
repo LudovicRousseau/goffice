@@ -99,7 +99,7 @@ static struct {
 	{ GOG_AXIS_POLAR_UNIT_GRADS,   N_("Grads"),   400.0,	"General",  0.0, 400.0,     50.0,      10.0}
 };
 
-#define GOG_AXIS_CIRCULAR_ROTATION_MIN -180.0
+#define GOG_AXIS_CIRCULAR_ROTATION_MIN (-180.0)
 #define GOG_AXIS_CIRCULAR_ROTATION_MAX  180.0
 
 typedef struct _GogAxisMapDesc GogAxisMapDesc;
@@ -534,6 +534,9 @@ map_discrete_calc_ticks (GogAxis *axis)
 
 /*
  *  Linear mapping
+ *
+ * We parameterize the linear map by f(x) = a(x - xmin) + b.
+ * (When inverted: f(x) = a(xmax - x) + b.)
  */
 
 static gboolean
@@ -544,7 +547,7 @@ map_linear_init (GogAxisMap *map, double offset, double length)
 	if (gog_axis_get_bounds (map->axis, &data->min, &data->max)) {
 		data->scale = 1 / (data->max - data->min);
 		data->a = data->scale * length;
-		data->b = offset - data->a * data->min;
+		data->b = offset;
 		return TRUE;
 	}
 	data->min = 0.0;
@@ -568,9 +571,9 @@ map_linear_to_view (GogAxisMap *map, double value)
 {
 	const MapData *data = map->data;
 
-	return map->axis->inverted ?
-		(data->min + data->max - value) * data->a + data->b :
-		value * data->a + data->b;
+	return map->axis->inverted
+		? (data->max - value) * data->a + data->b
+		: (value - data->min) * data->a + data->b;
 }
 
 static double
@@ -578,8 +581,7 @@ map_linear_derivative_to_view (GogAxisMap *map, double value)
 {
 	const MapData *data = map->data;
 
-	return map->axis->inverted ? -data->a: data->a;
-
+	return map->axis->inverted ? -data->a : data->a;
 }
 
 static double
@@ -588,8 +590,8 @@ map_linear_from_view (GogAxisMap *map, double value)
 	const MapData *data = map->data;
 
 	return map->axis->inverted ?
-		data->min + data->max - (value - data->b) / data->a :
-		(value - data->b) / data->a;
+		data->max - (value - data->b) / data->a :
+		(value - data->b) / data->a + data->min;
 }
 
 static double
@@ -597,7 +599,7 @@ map_baseline (GogAxisMap *map)
 {
 	const MapData *data = map->data;
 
-	if (0. < data->min)
+	if (0 < data->min)
 		return map_linear_to_view (map, data->min);
 	else if (0 > data->max)
 		return map_linear_to_view (map, data->max);
@@ -2531,7 +2533,7 @@ gog_axis_finalize (GObject *obj)
  * gog_axis_get_entry:
  * @axis: #GogAxis
  * @i:
- * @user_defined: an optionally NULL pointr to gboolean
+ * @user_defined: an optionally %NULL pointr to gboolean
  *
  * Returns: the value of axis element @i and sets @user_defined or
  * 	NaN on error
@@ -3585,7 +3587,7 @@ GSF_CLASS_FULL (GogAxis, gog_axis,
  * gog_axis_is_center_on_ticks:
  * @axis: #GogAxis
  *
- * Returns: TRUE if labels are centered on ticks when @axis is discrete
+ * Returns: %TRUE if labels are centered on ticks when @axis is discrete
  **/
 gboolean
 gog_axis_is_center_on_ticks (GogAxis const *axis)
@@ -3598,7 +3600,7 @@ gog_axis_is_center_on_ticks (GogAxis const *axis)
  * gog_axis_is_discrete:
  * @axis: #GogAxis
  *
- * Returns: TRUE if @axis enumerates a set of discrete items, rather than a
+ * Returns: %TRUE if @axis enumerates a set of discrete items, rather than a
  * 	continuous value
  **/
 gboolean
@@ -3612,7 +3614,7 @@ gog_axis_is_discrete (GogAxis const *axis)
  * gog_axis_is_inverted:
  * @axis: #GogAxis
  *
- * Returns: TRUE if @axis is inverted.
+ * Returns: %TRUE if @axis is inverted.
  **/
 gboolean
 gog_axis_is_inverted (GogAxis const *axis)
@@ -3624,8 +3626,8 @@ gog_axis_is_inverted (GogAxis const *axis)
 /**
  * gog_axis_get_bounds:
  * @axis: #GogAxis
- * @minima: non-NULL storage for result
- * @maxima: non-NULL storage for result
+ * @minima: (out): storage for result
+ * @maxima: (out): storage for result
  *
  * Returns: %TRUE if the bounds stored in @minima and @maxima are sane
  **/

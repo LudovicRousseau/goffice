@@ -1,3 +1,59 @@
+2025-03-01  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.59
+
+2025-01-25  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.58
+
+2024-02-11  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.57
+
+2023-11-02  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.56
+
+2023-02-02  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.55
+
+2023-01-19  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.54
+
+2022-09-17  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.53
+
+2022-04-18  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.52
+
+2022-01-20  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.51
+
+2021-06-10  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.50
+
+2021-03-14  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.49
+
+2020-08-12  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.48
+
+2020-05-09  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.47
+
+2019-11-06  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.46
+
 2019-05-20  Morten Welinder <terra@gnome.org>
 
 	* Release 0.10.45
@@ -413,7 +469,7 @@
 
 2008-11-08  Jorge Gonzalez  <jorgegonz@svn.gnome.org>
 
-	* es.po: Updated Spanish translation    
+	* es.po: Updated Spanish translation
 
 2008-10-18  Jorge Gonzalez  <jorgegonz@svn.gnome.org>
 
@@ -423,7 +479,7 @@
 
 	* Release 0.7.2
 
-2008-10-12  Jorge Gonzalez  <jorgegonz@svn.gnome.org>   
+2008-10-12  Jorge Gonzalez  <jorgegonz@svn.gnome.org>
 
 	* es.po: Updated Spanish translation
 
@@ -452,9 +508,9 @@
 
 	* Release 0.7.1
 
-2008-08-25  Jorge Gonzalez  <jorgegonz@svn.gnome.org>  
+2008-08-25  Jorge Gonzalez  <jorgegonz@svn.gnome.org>
 
-	* es.po: Updated Spanish translation 
+	* es.po: Updated Spanish translation
 
 2008-08-22  Halton Huo <halton.huo@sun.com>
 
@@ -468,7 +524,7 @@
 
 	* es.po: Updated Spanish translation
 
-2008-07-31  Djihed Afifi <djihed@gmail.com> 
+2008-07-31  Djihed Afifi <djihed@gmail.com>
 
 	* ar.po: Updated Arabic Translation by Djihed Afifi.
 
@@ -504,7 +560,7 @@
 
 	* Release 0.6.4
 
-2008-05-10  Jorge Gonzalez  <jorgegonz@svn.gnome.org>   
+2008-05-10  Jorge Gonzalez  <jorgegonz@svn.gnome.org>
 
 	* es.po: Updated Spanish translation
 
@@ -517,7 +573,7 @@
 	* cs.po: Fixed Czech translation by Lucas Lommer
 	(bug #517967).
 
-2008-03-20  Jorge Gonzalez  <jorgegonz@svn.gnome.org>     
+2008-03-20  Jorge Gonzalez  <jorgegonz@svn.gnome.org>
 
 	* es.po: Updated Spanish translation
 
@@ -539,7 +595,7 @@
         * zh_HK.po: Added Traditional Chinese translation(Hong Kong).
         * zh_TW.po: Updated Traditional Chinese translation(Taiwan).
 
-2008-03-10  Jorge Gonzalez  <jorgegonz@svn.gnome.org> 
+2008-03-10  Jorge Gonzalez  <jorgegonz@svn.gnome.org>
 
 	* es.po: Updated Spanish translation
 
@@ -560,11 +616,11 @@
 	* lt.po: Added Lithuanian translation.
 	* LINGUAS: Added lt
 
-2007-12-30  Jorge Gonzalez  <jorgegonz@svn.gnome.org>  
+2007-12-30  Jorge Gonzalez  <jorgegonz@svn.gnome.org>
 
-	* es.po: Updated Spanish translation 
+	* es.po: Updated Spanish translation
 
-2007-12-27  Djihed Afifi <djihed@gmail.com> 
+2007-12-27  Djihed Afifi <djihed@gmail.com>
 
 	* ar.po: Added Arabic Translation.
 	* LINGUAS: Added ar.
@@ -746,7 +802,7 @@
 2005-10-05  Jean Brefort  <jean.brefort@normalesup.org>
 
 	* *.po: updated strings to translate because of some strings
-	changes in the sources and removed unwanted #, fuzzy occurences.	
+	changes in the sources and removed unwanted #, fuzzy occurences.
 	* fr.po: updated french translation.
 
 2005-10-01  Stepan Kasal  <kasal@ucw.cz>

@@ -177,6 +177,29 @@ _go_math_init (void)
 	}
 #endif
 
+#ifdef GOFFICE_WITH_DECIMAL64
+	go_nanD = go_nan;
+	go_pinfD = go_pinf;
+	go_ninfD = go_ninf;
+	if (!(isnanD (go_nanD) &&
+	      go_pinfD > 0 && !finiteD (go_pinfD) &&
+	      go_ninfD < 0 && !finiteD (go_ninfD))) {
+		g_error ("Failed to generate _Decimal64 NaN/+Inf/-Inf.");
+	}
+
+	{
+		// There's a chance that some fool used FLT_RADIX here,
+		// but that would be really unhelpful.  The whole point
+		// is to have a fast, loss-free scaling function
+		_Decimal64 y = scalbnD (1, 1);
+		if (y != 10) {
+			// Don't try to print _Decimal64 at this stage
+			g_error ("We expected scalbnD(1,1) to be 10, but got %g",
+				 (double)y);
+		}
+	}
+#endif
+
 	{
 		double x = g_ascii_strtod ("24985672148.49707", NULL);
 		double sx = sin (x);
@@ -193,41 +216,54 @@ _go_math_init (void)
 	return;
 }
 
-/*
- * In preparation for truncation, make the value a tiny bit larger (seen
- * absolutely).  This makes ROUND (etc.) behave a little closer to what
- * people want, even if it is a bit bogus.
+/**
+ * go_add_epsilon:
+ * @x: a number
+ *
+ * Returns the next-larger representable value, except that zero and
+ * infinites are returned unchanged.
  */
 double
 go_add_epsilon (double x)
 {
-#ifdef HAVE_NEXTAFTER
-	return x == 0 ? x : nextafter (x, go_pinf);
-#else
 	if (!go_finite (x) || x == 0)
 		return x;
+#ifdef HAVE_NEXTAFTER
+	return nextafter (x, go_pinf);
+#else
+	if (x < 0)
+		return 0 - go_sub_epsilon(-x);
 	else {
-		int exp;
-		double mant = frexp (fabs (x), &exp);
-		double absres = ldexp (mant + DBL_EPSILON, exp);
-		return (x < 0) ? -absres : absres;
+		int e;
+		double mant = frexp (fabs (x), &e);
+		// mant is in range [0.5; 1)
+		return ldexp (mant + DBL_EPSILON / 2, e);
 	}
 #endif
 }
 
+/**
+ * go_sub_epsilon:
+ * @x: a number
+ *
+ * Returns the next-smaller representable value, except that zero and
+ * infinites are returned unchanged.
+ */
 double
 go_sub_epsilon (double x)
 {
-#ifdef HAVE_NEXTAFTER
-	return x == 0 ? x : nextafter (x, go_ninf);
-#else
 	if (!go_finite (x) || x == 0)
 		return x;
+#ifdef HAVE_NEXTAFTER
+	return nextafter (x, go_ninf);
+#else
+	if (x < 0)
+		return 0 - go_add_epsilon(-x);
 	else {
-		int exp;
-		double mant = frexp (fabs (x), &exp);
-		double absres = ldexp (mant - DBL_EPSILON, exp);
-		return (x < 0) ? -absres : absres;
+		int e;
+		double mant = frexp (fabs (x), &e);
+		// mant is in range [0.5; 1)
+		return ldexp (mant - (mant == 0.5 ? DBL_EPSILON / 4 : DBL_EPSILON / 2), e);
 	}
 #endif
 }
@@ -240,6 +276,14 @@ go_d2d (double x)
 	return *px;
 }
 
+/**
+ * go_fake_floor:
+ * @x: value to floor
+ *
+ * Returns: the floor of @x, ie., the largest integer that is not larger
+ * than @x.  However, this variant applies a 1 ulp grace interval for
+ * values that are just a hair less than an integer.
+ */
 double
 go_fake_floor (double x)
 {
@@ -248,11 +292,17 @@ go_fake_floor (double x)
 	if (x == floor (x))
 		return x;
 
-	return (x >= 0)
-		? floor (go_add_epsilon (x))
-		: floor (go_sub_epsilon (x));
+	return floor (go_add_epsilon (x));
 }
 
+/**
+ * go_fake_ceil:
+ * @x: value to ceil
+ *
+ * Returns: the ceiling of @x, ie., the smallest integer that is not smaller
+ * than @x.  However, this variant applies a 1 ulp grace interval for
+ * values that are just a hair larger than an integer.
+ */
 double
 go_fake_ceil (double x)
 {
@@ -261,9 +311,7 @@ go_fake_ceil (double x)
 	if (x == floor (x))
 		return x;
 
-	return (x >= 0)
-		? ceil (go_sub_epsilon (x))
-		: ceil (go_add_epsilon (x));
+	return ceil (go_sub_epsilon (x));
 }
 
 double
@@ -324,29 +372,67 @@ go_finite (double x)
 #endif
 }
 
+/**
+ * go_pow2:
+ * @n: exponent
+ *
+ * Computes 2 to the power of @n.  This is fast and accurate.
+ */
 double
 go_pow2 (int n)
 {
-	g_assert (FLT_RADIX == 2);
 	return ldexp (1.0, n);
 }
 
+#define TEN(n) ONE(n ## 0),ONE(n ## 1),ONE(n ## 2),ONE(n ## 3),ONE(n ## 4),ONE(n ## 5),ONE(n ## 6),ONE(n ## 7),ONE(n ## 8),ONE(n ## 9)
+#define HUNDRED(n) TEN(n ## 0),TEN(n ## 1),TEN(n ## 2),TEN(n ## 3),TEN(n ## 4),TEN(n ## 5),TEN(n ## 6),TEN(n ## 7),TEN(n ## 8),TEN(n ## 9)
+
+/**
+ * go_pow10:
+ * @n: exponent
+ *
+ * Computes 10 to the power of @n.  This is fast and accurate (under the
+ * reasonable assumption that the compiler is accurate).
+ */
 double
 go_pow10 (int n)
 {
-	static const double fast[] = {
-		1e-20, 1e-19, 1e-18, 1e-17, 1e-16, 1e-15, 1e-14, 1e-13, 1e-12, 1e-11,
-		1e-10, 1e-09, 1e-08, 1e-07, 1e-06, 1e-05, 1e-04, 1e-03, 1e-02, 1e-01,
-		1e+0,
-		1e+01, 1e+02, 1e+03, 1e+04, 1e+05, 1e+06, 1e+07, 1e+08, 1e+09, 1e+10,
-		1e+11, 1e+12, 1e+13, 1e+14, 1e+15, 1e+16, 1e+17, 1e+18, 1e+19, 1e+20
+	// On the assumption that the compiler's handling of double constants
+	// is correct, make a large table covering more or less the whole
+	// range.  We do not want to depend on the accuracy of pow(10,n)
+	// because it is known not to be what it should be.
+
+	static const double pos[] = {
+#define ONE(n) 1e+0 ## n
+		HUNDRED(0), HUNDRED(1), HUNDRED(2),
+		1e+300, 1e+301, 1e+302, 1e+303, 1e+304, 1e+305,
+		1e+306, 1e+307, 1e+308
+#undef ONE
+	};
+	static const double neg[] = {
+#define ONE(n) 1e-0 ## n
+		HUNDRED(0), HUNDRED(1), HUNDRED(2),
+		TEN(30), TEN(31),
+		1e-320, 1e-321, 1e-322, 1e-323
+#undef ONE
 	};
 
-	if (n >= -20 && n <= 20)
-		return (fast + 20)[n];
+	if (n >= 0 && n < (int)G_N_ELEMENTS(pos))
+		return pos[n];
+	if (n < 0 && (size_t)-n < G_N_ELEMENTS(neg))
+		return neg[-n];
 
 	return pow (10.0, n);
 }
+
+double
+go_pow (double x, double y)
+{
+	if (x == 10 && y > G_MININT && y < G_MAXINT && y == floor (y))
+		return go_pow10 ((int)y);
+	return pow (x, y);
+}
+
 
 static int
 strtod_helper (const char *s)
@@ -375,11 +461,12 @@ strtod_helper (const char *s)
 }
 
 
-/*
- * go_strtod: A sane strtod.
+/**
+ * go_strtod:
  * @s: string to convert
- * @end: optional pointer to end of string.
+ * @end: (out) (transfer none) (optional): pointer to end of string.
  *
+ * Returns: the numeric value of the given string.
  * Like strtod, but without hex notation and MS extensions.
  * Unlike strtod, there is no need to reset errno before calling this.
  */
@@ -414,8 +501,8 @@ go_strtod (const char *s, char **end)
 	return res;
 }
 
-/*
- * go_ascii_strtod: A sane g_ascii_strtod.
+/**
+ * go_ascii_strtod:
  * @s: string to convert
  * @end: optional pointer to end of string.
  *
@@ -552,7 +639,6 @@ go_pow2l (int n)
 #ifdef GOFFICE_SUPPLIED_LDEXPL
 	return powl (2.0L, n);
 #else
-	g_assert (FLT_RADIX == 2);
 	return ldexpl (1.0L, n);
 #endif
 }
@@ -560,25 +646,88 @@ go_pow2l (int n)
 long double
 go_pow10l (int n)
 {
-	static const long double fast[] = {
-		1e-20L, 1e-19L, 1e-18L, 1e-17L, 1e-16L, 1e-15L, 1e-14L, 1e-13L, 1e-12L, 1e-11L,
-		1e-10L, 1e-09L, 1e-08L, 1e-07L, 1e-06L, 1e-05L, 1e-04L, 1e-03L, 1e-02L, 1e-01L,
-		1e+0L,
-		1e+01L, 1e+02L, 1e+03L, 1e+04L, 1e+05L, 1e+06L, 1e+07L, 1e+08L, 1e+09L, 1e+10L,
-		1e+11L, 1e+12L, 1e+13L, 1e+14L, 1e+15L, 1e+16L, 1e+17L, 1e+18L, 1e+19L, 1e+20L
+	// On the assumption that the compiler's handling of long double
+	// constants is correct, make a large table covering more or less
+	// the whole range of long double.
+	// We do not want to depend on the accuracy of powl(10,n)
+	// because it is known not to be what it should be.
+
+	static const long double pos[] = {
+#define ONE(n) 1E+0 ## n ## L
+		HUNDRED(0), HUNDRED(1), HUNDRED(2), HUNDRED(3), HUNDRED(4),
+		HUNDRED(5), HUNDRED(6), HUNDRED(7), HUNDRED(8), HUNDRED(9),
+		HUNDRED(10), HUNDRED(11), HUNDRED(12), HUNDRED(13), HUNDRED(14),
+		HUNDRED(15), HUNDRED(16), HUNDRED(17), HUNDRED(18), HUNDRED(19),
+		HUNDRED(20), HUNDRED(21), HUNDRED(22), HUNDRED(23), HUNDRED(24),
+		HUNDRED(25), HUNDRED(26), HUNDRED(27), HUNDRED(28), HUNDRED(29),
+		HUNDRED(30), HUNDRED(31), HUNDRED(32), HUNDRED(33), HUNDRED(34),
+		HUNDRED(35), HUNDRED(36), HUNDRED(37), HUNDRED(38), HUNDRED(39),
+		HUNDRED(40), HUNDRED(41), HUNDRED(42), HUNDRED(43), HUNDRED(44),
+		HUNDRED(45), HUNDRED(46), HUNDRED(47), HUNDRED(48),
+		TEN(490), TEN(491), TEN(492),
+		1E+4930L, 1E+4931L, 1E+4932L
+#undef ONE
+	};
+	static const long double neg[] = {
+#define ONE(n) 1E-0 ## n ## L
+		HUNDRED(0), HUNDRED(1), HUNDRED(2), HUNDRED(3), HUNDRED(4),
+		HUNDRED(5), HUNDRED(6), HUNDRED(7), HUNDRED(8), HUNDRED(9),
+		HUNDRED(10), HUNDRED(11), HUNDRED(12), HUNDRED(13), HUNDRED(14),
+		HUNDRED(15), HUNDRED(16), HUNDRED(17), HUNDRED(18), HUNDRED(19),
+		HUNDRED(20), HUNDRED(21), HUNDRED(22), HUNDRED(23), HUNDRED(24),
+		HUNDRED(25), HUNDRED(26), HUNDRED(27), HUNDRED(28), HUNDRED(29),
+		HUNDRED(30), HUNDRED(31), HUNDRED(32), HUNDRED(33), HUNDRED(34),
+		HUNDRED(35), HUNDRED(36), HUNDRED(37), HUNDRED(38), HUNDRED(39),
+		HUNDRED(40), HUNDRED(41), HUNDRED(42), HUNDRED(43), HUNDRED(44),
+		HUNDRED(45), HUNDRED(46), HUNDRED(47), HUNDRED(48),
+		TEN(490), TEN(491), TEN(492), TEN(493), TEN(494),
+		1E-4950L
+#undef ONE
 	};
 
-	if (n >= -20 && n <= 20)
-		return (fast + 20)[n];
+	if (n >= 0 && n < (int)G_N_ELEMENTS(pos))
+		return pos[n];
+	if (n < 0 && (size_t)-n < G_N_ELEMENTS(neg))
+		return neg[-n];
 
 	return powl (10.0L, n);
 }
+#undef TEN
+#undef HUNDRED
 
-/*
- * go_strtold: A sane strtold.
+long double
+go_powl (long double x, long double y)
+{
+	if (x == 10 && y > G_MININT && y < G_MAXINT && y == floor (y))
+		return go_pow10l ((int)y);
+	return powl (x, y);
+}
+
+long double
+go_log10l (long double x)
+{
+	long double l = log10l (x);
+	int il;
+
+	// Quick rejection of stuff we cannot improve.  10^28 is too big
+	// for long double to be exact.
+	if (!(x == floorl (x)) || x < 1 || x > 1e27L)
+		return l;
+
+	il = (int)(l + 0.5);
+	if (x != go_pow10l (il))
+		return l;
+
+	return il;
+}
+
+
+/**
+ * go_strtold:
  * @s: string to convert
- * @end: optional pointer to end of string.
+ * @end: (out) (transfer none) (optional): pointer to end of string.
  *
+ * Returns: the numeric value of the given string.
  * Like strtold, but without hex notation and MS extensions.
  * Unlike strtold, there is no need to reset errno before calling this.
  */
@@ -612,12 +761,13 @@ go_strtold (const char *s, char **end)
 	return res;
 }
 
-/*
- * go_ascii_strtold: A sane strtold pretending to be in "C" locale.
+/**
+ * go_ascii_strtold:
  * @s: string to convert
  * @end: optional pointer to end of string.
  *
- * Like strtold, but without hex notation and MS extensions.
+ * Like strtold, but without hex notation and MS extensions and also
+ * assuming "C" locale.
  * Unlike strtold, there is no need to reset errno before calling this.
  */
 long double
@@ -644,6 +794,7 @@ go_ascii_strtold (const char *s, char **end)
 		}
 		g_string_append_c (tmp, *s++);
 	}
+	errno = 0;
 	res = strtold (tmp->str, NULL);
 	save_errno = errno;
 	g_string_free (tmp, TRUE);
@@ -652,24 +803,21 @@ go_ascii_strtold (const char *s, char **end)
 	return res;
 }
 
-/*
- * In preparation for truncation, make the value a tiny bit larger (seen
- * absolutely).  This makes ROUND (etc.) behave a little closer to what
- * people want, even if it is a bit bogus.
- */
 long double
 go_add_epsilonl (long double x)
 {
-#ifdef HAVE_NEXTAFTERL
-	return x == 0 ? x : nextafterl (x, go_pinfl);
-#else
 	if (!go_finitel (x) || x == 0)
 		return x;
+#ifdef HAVE_NEXTAFTERL
+	return nextafterl (x, go_pinfl);
+#else
+	if (x < 0)
+		return 0 - go_sub_epsilonl(-x);
 	else {
-		int exp;
-		long double mant = frexpl (fabsl (x), &exp);
-		long double absres = ldexpl (mant + LDBL_EPSILON, exp);
-		return (x < 0) ? -absres : absres;
+		int e;
+		long double mant = frexpl (fabsl (x), &e);
+		// mant is in range [0.5; 1)
+		return ldexpl (mant + LDBL_EPSILON / 2, e);
 	}
 #endif
 }
@@ -677,16 +825,18 @@ go_add_epsilonl (long double x)
 long double
 go_sub_epsilonl (long double x)
 {
+	if (!go_finitel (x) || x == 0)
+		return x;
 #ifdef HAVE_NEXTAFTERL
 	return x == 0 ? x : nextafterl (x, go_ninfl);
 #else
-	if (!go_finitel (x) || x == 0)
-		return x;
+	if (x < 0)
+		return 0 - go_add_epsilonl(-x);
 	else {
-		int exp;
-		long double mant = frexpl (fabsl (x), &exp);
-		long double absres = ldexpl (mant - LDBL_EPSILON, exp);
-		return (x < 0) ? -absres : absres;
+		int e;
+		long double mant = frexpl (fabsl (x), &e);
+		// mant is in range [0.5; 1)
+		return ldexpl (mant - (mant == 0.5L ? LDBL_EPSILON / 4 : LDBL_EPSILON / 2), e);
 	}
 #endif
 }
@@ -697,9 +847,7 @@ go_fake_floorl (long double x)
 	if (x == floorl (x))
 		return x;
 
-	return (x >= 0)
-		? floorl (go_add_epsilonl (x))
-		: floorl (go_sub_epsilonl (x));
+	return floorl (go_add_epsilonl (x));
 }
 
 long double
@@ -708,9 +856,7 @@ go_fake_ceill (long double x)
 	if (x == floorl (x))
 		return x;
 
-	return (x >= 0)
-		? ceill (go_sub_epsilonl (x))
-		: ceill (go_add_epsilonl (x));
+	return ceill (go_sub_epsilonl (x));
 }
 
 long double
@@ -726,7 +872,7 @@ go_fake_roundl (long double x)
 	 * case is nextafter(0.5,-1) for which we want to produce 1 here.
 	 */
 	y = go_fake_floorl (fabsl (x) + 0.5L);
-	return (x < 0) ? -y : y;
+	return (x < 0) ? 0 - y : y;
 }
 
 long double
@@ -737,17 +883,17 @@ go_fake_truncl (long double x)
 
 	return (x >= 0)
 		? floorl (go_add_epsilonl (x))
-		: -floorl (go_add_epsilonl (-x));
+		: 0 - floorl (go_add_epsilonl (-x));
 }
 
 #ifdef GOFFICE_SUPPLIED_LDEXPL
 long double
-ldexpl (long double x, int exp)
+ldexpl (long double x, int e)
 {
 	if (!go_finitel (x) || x == 0)
 		return x;
 	else {
-		long double res = x * go_pow2l (exp);
+		long double res = x * go_pow2l (e);
 		if (go_finitel (res))
 			return res;
 		else {
@@ -760,27 +906,27 @@ ldexpl (long double x, int exp)
 
 #ifdef GOFFICE_SUPPLIED_FREXPL
 long double
-frexpl (long double x, int *exp)
+frexpl (long double x, int *e)
 {
 	long double l2x;
 
 	if (!go_finitel (x) || x == 0) {
-		*exp = 0;
+		*e = 0;
 		return x;
 	}
 
 	l2x = logl (fabsl (x)) / logl (2);
-	*exp = (int)floorl (l2x);
+	*e = (int)floorl (l2x);
 
 	/*
 	 * Now correct the result and adjust things that might have gotten
 	 * off-by-one due to rounding.
 	 */
-	x /= go_pow2l (*exp);
+	x /= go_pow2l (*e);
 	if (fabsl (x) >= 1.0)
-		x /= 2, (*exp)++;
+		x /= 2, (*e)++;
 	else if (fabsl (x) < 0.5)
-		x *= 2, (*exp)--;
+		x *= 2, (*e)--;
 
 	return x;
 }
@@ -852,6 +998,189 @@ modfl (long double x, long double *iptr)
 	}
 }
 #endif
+
+#endif
+
+/* ------------------------------------------------------------------------- */
+
+#ifdef GOFFICE_WITH_DECIMAL64
+
+_Decimal64 go_nanD;
+_Decimal64 go_pinfD;
+_Decimal64 go_ninfD;
+
+int
+go_finiteD (_Decimal64 x)
+{
+	return finiteD (x);
+}
+
+_Decimal64
+go_pow2D (int n)
+{
+	if (n >= -1022 && n <= 1023)
+		return (_Decimal64)(go_pow2 (n));
+	else
+		return powD (2.dd, n);
+}
+
+_Decimal64
+go_pow10D (int n)
+{
+	return scalbnD (1.dd, n);
+}
+
+_Decimal64
+go_powD (_Decimal64 x, _Decimal64 y)
+{
+	return powD (x, y);
+}
+
+_Decimal64
+go_log10D (_Decimal64 x)
+{
+	return log10D (x);
+}
+
+
+/**
+ * go_strtoDd:
+ * @s: string to convert
+ * @end: (out) (transfer none) (optional): pointer to end of string.
+ *
+ * Returns: the numeric value of the given string.
+ * Like strtod, but for type _Decimal64 and without hex notation and
+ * MS extensions.
+ * Unlike strtold, there is no need to reset errno before calling this.
+ */
+_Decimal64
+go_strtoDd (const char *s, char **end)
+{
+	int maxlen = strtod_helper (s);
+	int save_errno;
+	char *tmp;
+	_Decimal64 res;
+
+	if (maxlen == INT_MAX) {
+		errno = 0;
+		return strtoDd (s, end);
+	} else if (maxlen < 0) {
+		errno = 0;
+		if (end)
+			*end = (char *)s - maxlen;
+		return 0;
+	}
+
+	tmp = g_strndup (s, maxlen);
+	errno = 0;
+	res = strtoDd (tmp, end);
+	save_errno = errno;
+	if (end)
+		*end = (char *)s + (*end - tmp);
+	g_free (tmp);
+	errno = save_errno;
+
+	return res;
+}
+
+/**
+ * go_ascii_strtoDd:
+ * @s: string to convert
+ * @end: optional pointer to end of string.
+ *
+ * Like strtoDd, but applying "C" locale and without hex notation and
+ * MS extensions.
+ * Unlike strtod, there is no need to reset errno before calling this.
+ */
+_Decimal64
+go_ascii_strtoDd (const char *s, char **end)
+{
+	GString *tmp;
+	const GString *decimal;
+	int save_errno;
+	char *the_end;
+	/* Use the "double" version for parsing.  */
+	_Decimal64 res = go_ascii_strtod (s, &the_end);
+	if (end)
+		*end = the_end;
+	if (the_end == s)
+		return res;
+
+	decimal = go_locale_get_decimal ();
+	tmp = g_string_sized_new (the_end - s + 10);
+	while (s < the_end) {
+		if (*s == '.') {
+			g_string_append_len (tmp, decimal->str, decimal->len);
+			g_string_append (tmp, ++s);
+			break;
+		}
+		g_string_append_c (tmp, *s++);
+	}
+	errno = 0;
+	res = strtoDd (tmp->str, NULL);
+	save_errno = errno;
+	g_string_free (tmp, TRUE);
+	errno = save_errno;
+
+	return res;
+}
+
+_Decimal64
+go_add_epsilonD (_Decimal64 x)
+{
+	return x == 0 ? x : nextafterD (x, go_pinfD);
+}
+
+_Decimal64
+go_sub_epsilonD (_Decimal64 x)
+{
+	return x == 0 ? x : nextafterD (x, go_ninfD);
+}
+
+_Decimal64
+go_fake_floorD (_Decimal64 x)
+{
+	if (x == floorD (x))
+		return x;
+
+	return floorD (go_add_epsilonD (x));
+}
+
+_Decimal64
+go_fake_ceilD (_Decimal64 x)
+{
+	if (x == floorD (x))
+		return x;
+
+	return ceilD (go_sub_epsilonD (x));
+}
+
+_Decimal64
+go_fake_roundD (_Decimal64 x)
+{
+	_Decimal64 y;
+
+	if (x == floorD (x))
+		return x;
+
+	/*
+	 * Adding a half here is ok.  The only problematic non-integer
+	 * case is nextafter(0.5,-1) for which we want to produce 1 here.
+	 */
+	y = go_fake_floorD (fabsD (x) + 0.5dd);
+	return (x < 0) ? 0 - y : y;
+}
+
+_Decimal64
+go_fake_truncD (_Decimal64 x)
+{
+	if (x == floorD (x))
+		return x;
+
+	return (x >= 0)
+		? floorD (go_add_epsilonD (x))
+		: 0 - floorD (go_add_epsilonD (-x));
+}
 
 #endif
 
@@ -1053,11 +1382,18 @@ go_tanpi (double x)
 		return go_sinpi (x) / go_cospi (x);
 }
 
+/**
+ * go_cotpi:
+ * @x: a number
+ *
+ * Returns: the cotangent of Pi times @x, but with less error than doing the
+ * multiplication outright.
+ */
 double
 go_cotpi (double x)
 {
 	/*
-	 * IEEE 754 2008 doesn't have tanpi.  Neither does crlibm.  Mirror
+	 * IEEE 754 2008 doesn't have cotpi.  Neither does crlibm.  Mirror
 	 * tanpi here.
 	 */
 
@@ -1072,6 +1408,14 @@ go_cotpi (double x)
 		return go_cospi (x) / go_sinpi (x);
 }
 
+/**
+ * go_atan2pi:
+ * @y: a number
+ * @x: a number
+ *
+ * Returns: the polar angle of the point (@x,@y) in radians divided by Pi.
+ * The result is a number between -1 and +1.
+ */
 double
 go_atan2pi (double y, double x)
 {
@@ -1082,6 +1426,13 @@ go_atan2pi (double y, double x)
 	return atan2 (y, x) / M_PI;
 }
 
+/**
+ * go_atanpi:
+ * @x: a number
+ *
+ * Returns: the arc tangent of @x in radians divided by Pi.  The result is a
+ * number between -1 and +1.
+ */
 double
 go_atanpi (double x)
 {
@@ -1131,14 +1482,6 @@ do_sinpil (long double x, int k)
 	return (k & 2) ? 0 - y : y;
 }
 
-
-/**
- * go_sinpil:
- * @x: a number
- *
- * Returns: the sine of Pi times @x, but with less error than doing the
- * multiplication outright.
- */
 long double
 go_sinpil (long double x)
 {
@@ -1156,13 +1499,6 @@ go_sinpil (long double x)
 	return do_sinpil (x, k);
 }
 
-/**
- * go_cospil:
- * @x: a number
- *
- * Returns: the cosine of Pi times @x, but with less error than doing the
- * multiplication outright.
- */
 long double
 go_cospil (long double x)
 {
@@ -1179,13 +1515,6 @@ go_cospil (long double x)
 	return do_sinpil (x, k + 1);
 }
 
-/**
- * go_tanpil:
- * @x: a number
- *
- * Returns: the tangent of Pi times @x, but with less error than doing the
- * multiplication outright.
- */
 long double
 go_tanpil (long double x)
 {
@@ -1210,7 +1539,7 @@ long double
 go_cotpil (long double x)
 {
 	/*
-	 * IEEE 754 2008 doesn't have tanpi.  Neither does crlibm.  Mirror
+	 * IEEE 754 2008 doesn't have cotpi.  Neither does crlibm.  Mirror
 	 * tanpi here.
 	 */
 
@@ -1242,5 +1571,133 @@ go_atanpil (long double x)
 }
 
 #endif
+
+#ifdef GOFFICE_WITH_DECIMAL64
+
+static _Decimal64
+reduce_halfD (_Decimal64 x, int *pk)
+{
+	int k = 0;
+
+	if (x < 0) {
+		x = -reduce_halfD (-x, &k);
+		k = 4 - k;
+		if (x == -0.25dd)
+			x += 0.5dd, k += 3;
+	} else {
+		x = fmod (x, 2);
+		if (x >= 1)
+			x -= 1, k += 2;
+		if (x >= 0.5dd)
+			x -= 0.5dd, k++;
+		if (x > 0.25dd)
+			x -= 0.5dd, k++;
+	}
+
+	*pk = (k & 3);
+	return x;
+}
+
+static _Decimal64
+do_sinpiD (_Decimal64 x, int k)
+{
+	_Decimal64 y;
+
+	if (x == 0)
+		y = k & 1;
+	else if (x == 0.25dd)
+		y = 0.707106781186547524400844362104849039284835937688474036588339dd;
+	else
+		y = (k & 1) ? cos (M_PID * x) : sin (M_PID * x);
+
+	return (k & 2) ? 0 - y : y;
+}
+
+_Decimal64
+go_sinpiD (_Decimal64 x)
+{
+	int k;
+	_Decimal64 x0 = x;
+	x = reduce_halfD (x, &k);
+
+	/*
+	 * Per IEEE 754 2008:
+	 * sinpi(n) == 0 with sign of n.
+	 */
+	if (x == 0 && (k & 1) == 0)
+		return copysignD (0, x0);
+
+	return do_sinpiD (x, k);
+}
+
+_Decimal64
+go_cospiD (_Decimal64 x)
+{
+	int k;
+	x = reduce_halfD (x, &k);
+
+	/*
+	 * Per IEEE 754 2008:
+	 * cospi(n+0.5) == +0 for any integer n.
+	 */
+	if (x == 0 && (k & 1) == 1)
+		return +0.0;
+
+	return do_sinpiD (x, k + 1);
+}
+
+_Decimal64
+go_tanpiD (_Decimal64 x)
+{
+	/*
+	 * IEEE 754 2008 doesn't have tanpi and thus doesn't define the
+	 * behaviour for -0 argument or result.  crlibm has tanpi, but
+	 * doesn't seem to be fully clear on these cases.
+	 */
+
+	/* inf -> nan; -n -> -0; +n -> +0 */
+	x = fmodD (x, 1.0dd);
+
+	if (x == 0)
+		return copysignD (0.0dd, x);
+	if (fabsD (x) == 0.5dd)
+		return copysignD (go_nanD, x);
+	else
+		return go_sinpiD (x) / go_cospiD (x);
+}
+
+_Decimal64
+go_cotpiD (_Decimal64 x)
+{
+	/*
+	 * IEEE 754 2008 doesn't have cotpi.  Neither does crlibm.  Mirror
+	 * tanpi here.
+	 */
+
+	/* inf -> nan; -n -> -0; +n -> +0 */
+	x = fmodD (x, 1.0dd);
+
+	if (x == 0)
+		return copysign (go_nanD, x);
+	if (fabsD (x) == 0.5dd)
+		return copysignD (0.0dd, x);
+	else
+		return go_cospiD (x) / go_sinpiD (x);
+}
+
+_Decimal64
+go_atan2piD (_Decimal64 y, _Decimal64 x)
+{
+	return atan2D (y, x) / M_PID;
+}
+
+_Decimal64
+go_atanpiD (_Decimal64 x)
+{
+	return x < 0 ? -go_atan2piD (-x, 1) : go_atan2piD (x, 1);
+}
+
+#endif
+
 
 /* ------------------------------------------------------------------------- */

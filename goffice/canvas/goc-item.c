@@ -116,6 +116,7 @@ enum {
  * reposition children of the GtkLayout parent of the canvas to their new
  * position.
  * @get_window: returns the #GdkWindow for the item if any.
+ * @copy: method for copying an item.
  *
  * The base class for all canvas items.
  **/
@@ -218,7 +219,9 @@ static void
 goc_item_dispose (GObject *object)
 {
 	GocItem *item = GOC_ITEM (object);
+#ifdef GOFFICE_WITH_GTK
 	GtkStyleContext *context;
+#endif
 
 	if (item->canvas) {
 		item->cached_bounds = TRUE; /* avoids a call to update_bounds */
@@ -470,7 +473,7 @@ goc_item_maybe_invalidate (GocItem *item, gboolean ignore_visibility)
 	if (!parent)
 		return;
 
-	if (!goc_canvas_get_realized (item->canvas))
+	if (!item->canvas || !goc_canvas_get_realized (item->canvas))
 		return;
 
 	if (!ignore_visibility && !item->visible)
@@ -597,6 +600,7 @@ goc_item_bounds_changed (GocItem *item)
 			cur->cached_bounds = FALSE;
 			cur = GOC_ITEM (cur->parent);
 		} while (cur);
+		return;
 	}
 	goc_item_invalidate (item);
 }
@@ -634,22 +638,20 @@ goc_item_reordered (GocItem *item, int n)
 {
 #ifdef GOFFICE_WITH_GTK
 	GocGroup *group = item->parent;
-	GList *cur = g_list_find (group->children, item);
-	GdkWindow *window;
-	if (n > 0) {
-		while (cur) {
-			window = goc_item_get_window (GOC_ITEM (cur->data));
-			if (window)
+	int cur = goc_group_find_child (group, item);
+	while (TRUE) {
+		GocItem *child = goc_group_get_child (group, cur);
+		GdkWindow *window;
+		if (!child)
+			break;
+		window = goc_item_get_window (child);
+		if (window) {
+			if (n > 0)
 				gdk_window_raise (window);
-			cur = cur->next;
-		}
-	} else {
-		while (cur) {
-			window = goc_item_get_window (GOC_ITEM (cur->data));
-			if (window)
+			else
 				gdk_window_lower (window);
-			cur = cur->prev;
 		}
+		cur += (n > 0 ? +1 : -1);
 	}
 #endif
 }
@@ -666,15 +668,16 @@ goc_item_reordered (GocItem *item, int n)
 void
 goc_item_raise (GocItem *item, int n)
 {
-	GList *orig = g_list_find (item->parent->children, item);
-	GList *dest = g_list_nth (orig, n + 1);
-	if (dest)
-		item->parent->children = g_list_insert_before (item->parent->children, dest, item);
-	else
-		item->parent->children = g_list_append (item->parent->children, item);
-	item->parent->children = g_list_remove_link (item->parent->children, orig);
+	GocGroup *group = item->parent;
+	GPtrArray *children = goc_group_get_children (group);
+	int len = children->len;
+	int ix = goc_group_find_child (group, item);
+	if (n > len - 1 - ix) n = len - 1 - ix;
+	g_ptr_array_remove_index (children, ix);
+	g_ptr_array_insert (children, ix + n, item);
 	goc_item_invalidate (item);
 	goc_item_reordered (item, n);
+	g_ptr_array_unref (children);
 }
 
 /**
@@ -689,15 +692,16 @@ goc_item_raise (GocItem *item, int n)
 void
 goc_item_lower (GocItem *item, int n)
 {
-	GList *orig = g_list_find (item->parent->children, item);
-	GList *dest = g_list_nth_prev (orig, n);
-	if (dest)
-		item->parent->children = g_list_insert_before (item->parent->children, dest, item);
-	else
-		item->parent->children = g_list_prepend (item->parent->children, item);
-	item->parent->children = g_list_remove_link (item->parent->children, orig);
+	GocGroup *group = item->parent;
+	GPtrArray *children = goc_group_get_children (group);
+	int ix = goc_group_find_child (group, item);
+	if (n > ix) n = ix;
+
+	g_ptr_array_remove_index (children, ix);
+	g_ptr_array_insert (children, ix - n, item);
 	goc_item_invalidate (item);
 	goc_item_reordered (item, -n);
+	g_ptr_array_unref (children);
 }
 
 /**
@@ -710,11 +714,7 @@ goc_item_lower (GocItem *item, int n)
 void
 goc_item_lower_to_bottom (GocItem *item)
 {
-	g_return_if_fail (item->parent != NULL);
-	item->parent->children = g_list_remove (item->parent->children, item);
-	item->parent->children = g_list_prepend (item->parent->children, item);
-	goc_item_invalidate (item);
-	goc_item_reordered (item, G_MININT);
+	goc_item_lower (item, G_MAXINT);
 }
 
 /**
@@ -727,11 +727,7 @@ goc_item_lower_to_bottom (GocItem *item)
 void
 goc_item_raise_to_top (GocItem *item)
 {
-	g_return_if_fail (item->parent != NULL);
-	item->parent->children = g_list_remove (item->parent->children, item);
-	item->parent->children = g_list_append (item->parent->children, item);
-	goc_item_invalidate (item);
-	goc_item_reordered (item, G_MAXINT);
+	goc_item_raise (item, G_MAXINT);
 }
 
 void
@@ -833,8 +829,9 @@ goc_item_set_transform (GocItem *item, cairo_matrix_t *m)
 void
 _goc_item_transform (GocItem const *item, cairo_t *cr, gboolean scaled)
 {
+	double scale = item->canvas? item->canvas->pixels_per_unit: 1.0;
 	cairo_matrix_t m = item->transform, buf,
-		sc = {item->canvas->pixels_per_unit, 0., 0., item->canvas->pixels_per_unit, 0., 0.};
+		sc = {scale, 0., 0., scale, 0., 0.};
 	while ((item = GOC_ITEM (item->parent)))
 		if (item->transformed) {
 			cairo_matrix_multiply (&buf, &m, &item->transform);
@@ -913,3 +910,57 @@ goc_item_get_style_context (const GocItem *item)
 	return context;
 }
 #endif
+
+/**
+ * goc_item_duplicate:
+ * @item: #GocItem
+ * @parent: #GocGroup
+ *
+ * Creates a new GocItem identical to @item inside the parent GocGroup if not
+ * NULL.
+ *
+ * Returns: (transfer none): The duplicated item or NULL if the duplication was
+ * not possible.
+ */
+GocItem*
+goc_item_duplicate (GocItem *item, GocGroup *parent)
+{
+	GocItemClass *klass;
+	GocItem *ret;
+
+	g_return_val_if_fail (GOC_IS_ITEM (item), NULL);
+
+	klass = GOC_ITEM_GET_CLASS (item);
+	if (klass->copy == NULL)
+		return NULL;
+
+	ret = GOC_ITEM ((parent)? goc_item_new (parent, G_OBJECT_TYPE (item), NULL):
+							  g_object_new (G_OBJECT_TYPE (item), NULL));
+	
+	klass->copy (ret, item);
+	return ret;
+}
+
+/**
+ * goc_item_copy:
+ * @source: #GocItem
+ * @dest: #GocItem
+ *
+ * Copies @source properties to @dest. The two items must be of the same type
+ * and their common class needs a @copy member.
+ **/
+void
+goc_item_copy (GocItem *dest, GocItem *source)
+{
+	GocItemClass *klass = GOC_ITEM_GET_CLASS (source);
+
+	g_return_if_fail (GOC_IS_ITEM (source));
+	g_return_if_fail (GOC_IS_ITEM (dest));
+	g_return_if_fail (klass == GOC_ITEM_GET_CLASS (dest));
+	g_return_if_fail (klass->copy);
+	dest->visible = source->visible;
+	dest->op = source->op;
+	dest->transform = source->transform;
+	dest->transformed = source->transformed;
+	klass->copy (dest, source);
+}

@@ -1,7 +1,7 @@
 #ifndef __GO_MATH_H
 #define __GO_MATH_H
 
-#include <goffice/goffice-features.h>
+#include <goffice/goffice.h>
 #include <math.h>
 #include <glib.h>
 #include <goffice/goffice.h>
@@ -35,6 +35,7 @@ double go_rint (double x);
 int go_finite (double x);
 double go_pow2 (int n);
 double go_pow10 (int n);
+double go_pow (double x, double y);
 
 double go_strtod (const char *s, char **end);
 double go_ascii_strtod (const char *s, char **end);
@@ -83,6 +84,8 @@ long double go_fake_truncl (long double x);
 int go_finitel (long double x);
 long double go_pow2l (int n);
 long double go_pow10l (int n);
+long double go_powl (long double x, long double y);
+long double go_log10l (long double x);
 
 long double go_strtold (const char *s, char **end);
 long double go_ascii_strtold (const char *s, char **end);
@@ -98,10 +101,10 @@ long double go_atanpil (long double x);
  * We provide working versions of these functions for long doubles.
  */
 #ifdef GOFFICE_SUPPLIED_LDEXPL
-long double ldexpl (long double x, int exp);
+long double ldexpl (long double x, int e);
 #endif
 #ifdef GOFFICE_SUPPLIED_FREXPL
-long double frexpl (long double x, int *exp);
+long double frexpl (long double x, int *e);
 #endif
 #ifdef GOFFICE_SUPPLIED_STRTOLD
 long double strtold (const char *, char **);
@@ -115,6 +118,37 @@ long double modfl (long double x, long double *iptr);
 /* testing GOFFICE_WITH_WINREG to check if we are using Windows (MSYS2) */
 #if _MSC_VER
 #define isnan _isnan
+/* ------------------------------------------------------------------------- */
+
+#ifdef GOFFICE_WITH_DECIMAL64
+
+GO_VAR_DECL _Decimal64 go_nanD;
+GO_VAR_DECL _Decimal64 go_pinfD;
+GO_VAR_DECL _Decimal64 go_ninfD;
+
+_Decimal64 go_add_epsilonD (_Decimal64 x);
+_Decimal64 go_sub_epsilonD (_Decimal64 x);
+_Decimal64 go_fake_floorD (_Decimal64 x);
+_Decimal64 go_fake_ceilD (_Decimal64 x);
+_Decimal64 go_fake_roundD (_Decimal64 x);
+_Decimal64 go_fake_truncD (_Decimal64 x);
+
+int go_finiteD (_Decimal64 x);
+_Decimal64 go_pow2D (int n);
+_Decimal64 go_pow10D (int n);
+_Decimal64 go_powD (_Decimal64 x, _Decimal64 y);
+_Decimal64 go_log10D (_Decimal64 x);
+
+_Decimal64 go_strtoDd (const char *s, char **end);
+_Decimal64 go_ascii_strtoDd (const char *s, char **end);
+
+_Decimal64 go_sinpiD (_Decimal64 x);
+_Decimal64 go_cospiD (_Decimal64 x);
+_Decimal64 go_tanpiD (_Decimal64 x);
+_Decimal64 go_cotpiD (_Decimal64 x);
+_Decimal64 go_atan2piD (_Decimal64 y, _Decimal64 x);
+_Decimal64 go_atanpiD (_Decimal64 x);
+
 #endif
 
  #if (GOFFICE_WITH_WINREG==1)
@@ -123,6 +157,10 @@ long double modfl (long double x, long double *iptr);
  
 
 /* ------------------------------------------------------------------------- */
+
+#ifdef _MSC_VER
+#define isnan _isnan
+#endif
 
 G_END_DECLS
 

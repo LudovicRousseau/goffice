@@ -33,6 +33,7 @@
 #include <goffice/goffice-config.h>
 #include <goffice/math/go-math.h>
 #include "go-dtoa.h"
+#include "go-ryu.h"
 #include <string.h>
 #include <inttypes.h>
 #include <stdarg.h>
@@ -156,10 +157,6 @@ static int fmt_fp(FAKE_FILE *f, long double y, int w, int p, int fl, int t)
 	int pl;
 	char ebuf0[3*sizeof(int)], *ebuf=&ebuf0[3*sizeof(int)], *estr;
 
-#ifndef MUSL_ORIGINAL
-	if (fl & FLAG_TRUNCATE) g_string_truncate (f, 0);
-#endif
-
 	pl=1;
 	if (signbit(y)) {
 		y=-y;
@@ -171,7 +168,7 @@ static int fmt_fp(FAKE_FILE *f, long double y, int w, int p, int fl, int t)
 
 	if (!go_finitel(y)) {
 		const char *s = (t&32)?"inf":"INF";
-		if (y!=y) s=(t&32)?"nan":"NAN", pl=0;
+		if (y!=y) s=(t&32)?"nan":"NAN";
 		pad(f, ' ', w, 3+pl, fl&~ZERO_PAD);
 		out(f, prefix, pl);
 		out(f, s, 3);
@@ -403,15 +400,29 @@ static int fmt_fp(FAKE_FILE *f, long double y, int w, int p, int fl, int t)
 
 /* musl code ends here */
 
+typedef enum {
+	FP_DOUBLE,
+	FP_LONG_DOUBLE,
+	FP_DECIMAL64
+} FloatType;
+
+typedef union {
+	long double ld;
+#ifdef GOFFICE_WITH_DECIMAL64
+	_Decimal64 d64;
+#endif
+} FloatValueType;
+
+
 static void
-parse_fmt (const char *fmt, va_list args, gboolean *is_long,
-	   int *w, int *p, int *fl, int *t, long double *d)
+parse_fmt (const char *fmt, va_list args, FloatType *fltyp,
+	   int *w, int *p, int *fl, int *t, FloatValueType *d)
 {
-	*is_long = FALSE;
+	*fltyp = FP_DOUBLE;
+	d->ld = 0;
 	*w = 1;
 	*p = -1;
 	*fl = 0;
-	*d = 0;
 	*t = 'g';
 
 	while (1) {
@@ -427,8 +438,11 @@ parse_fmt (const char *fmt, va_list args, gboolean *is_long,
 		break;
 	}
 
-	while (g_ascii_isdigit (*fmt))
-		*w = *w * 10 + (*fmt++ - '0');
+	if (g_ascii_isdigit (*fmt)) {
+		*w = 0;
+		while (g_ascii_isdigit (*fmt))
+			*w = *w * 10 + (*fmt++ - '0');
+	}
 
 	if (*fmt == '.') {
 		if (fmt[1] == '*') {
@@ -443,40 +457,181 @@ parse_fmt (const char *fmt, va_list args, gboolean *is_long,
 	}
 
 	if (*fmt == 'L') {
-		*is_long = TRUE;
+		*fltyp = FP_LONG_DOUBLE;
 		fmt++;
 	}
+#ifdef GOFFICE_WITH_DECIMAL64
+	else if (*fmt == *GO_DECIMAL64_MODIFIER) {
+		*fltyp = FP_DECIMAL64;
+		fmt++;
+	}
+#endif
 
 	if (!strchr ("efgaEFGA", *fmt))
 		return;
 	*t = *fmt;
 
-	if (*is_long)
-		*d = va_arg (args, long double);
-	else
-		*d = va_arg (args, double);
-}
-
-static long double
-strto (const char *str, gboolean is_long, gboolean is_ascii)
-{
-	if (is_long) {
+	switch (*fltyp) {
+	case FP_DOUBLE:
+		d->ld = va_arg (args, double);
+		break;
+	case FP_LONG_DOUBLE:
 #ifdef GOFFICE_WITH_LONG_DOUBLE
-		/*
-		 * FIXME: ignore ascii flag for now.  Given the limited
-		 * and checked usage of this function this should still
-		 * be safe, if suboptimal.
-		 */
-		return go_strtold (str, NULL);
+		d->ld = va_arg (args, long double);
 #else
-		return go_nan;
+		memset (d, 0, sizeof (*d));
+		g_critical ("Compiled without long-double, then asked to use it");
 #endif
-	} else {
-		return is_ascii
-			? g_ascii_strtod (str, NULL)
-			: go_strtod (str, NULL);
+		break;
+	case FP_DECIMAL64:
+#ifdef GOFFICE_WITH_DECIMAL64
+		d->d64 = va_arg (args, _Decimal64);
+#else
+		memset (d, 0, sizeof (*d));
+		g_critical ("Compiled without Decimal64, then asked to use it");
+#endif
+		break;
 	}
 }
+
+static void
+fmt_shortest (GString *dst, FloatValueType *d, int fl, int t, FloatType fltyp)
+{
+	size_t oldlen = dst->len;
+	int n, e, ndec;
+	char *epos, *dpos;
+	gboolean use_e_notation;
+	GString const *dec = go_locale_get_decimal();
+	gboolean used_ryu;
+	int prec;
+
+	g_string_set_size (dst, 53 + oldlen + dec->len);
+	switch (fltyp) {
+	case FP_DOUBLE:
+		n = go_ryu_d2s_buffered_n ((double)(d->ld), dst->str + oldlen);
+		used_ryu = TRUE;
+		prec = 17;
+		break;
+#ifdef GOFFICE_WITH_LONG_DOUBLE
+	case FP_LONG_DOUBLE:
+		n = go_ryu_ld2s_buffered_n (d->ld, dst->str + oldlen);
+		used_ryu = TRUE;
+		prec = 21;
+		break;
+#endif
+#ifdef GOFFICE_WITH_DECIMAL64
+	case FP_DECIMAL64: {
+		const char *sfmt = (t & 32)
+			? "%.16" GO_DECIMAL64_MODIFIER "g"
+			: "%.16" GO_DECIMAL64_MODIFIER "G";
+		n = sprintf (dst->str + oldlen, sfmt, d->d64);
+		// FIXME: if sprintf gains intl support, fix needed here
+		used_ryu = FALSE;
+		prec = 16;
+		break;
+	}
+#endif
+	default:
+		g_assert_not_reached ();
+	}
+
+	g_string_set_size (dst, oldlen + n);
+	dpos = strchr (dst->str + oldlen, '.');
+	epos = strchr (dst->str + oldlen, 'E');
+	ndec = dpos
+		? (epos
+		   ? epos - (dpos + 1)
+		   : (int)(dst->len - (dpos + 1 - dst->str)))
+		: 0;
+	if (!epos)
+		return; // NaN etc.
+
+	if (dpos && !(fl & FLAG_ASCII)) {
+		int dlen = dec->len;
+		const char *dstr = dec->str;
+		*dpos = dstr[0];
+		if (dlen > 1) {
+			g_string_insert_len (dst, dpos - dst->str + 1,
+					     dstr + 1, dlen - 1);
+			epos += dlen - 1;
+			// We allocated enough that dpos/epos are still good
+		}
+	}
+
+	e = atoi (epos + 1);
+	use_e_notation =
+		(t | 32) == 'e' ||
+		((t | 32) == 'g' && (e < -4 || e >= prec));
+	if (use_e_notation) {
+		// Downcase 'E', if needed
+		if (t & 32) *epos = 'e';
+		// Use printf rules for exponents
+		if (!used_ryu) {
+			; // Nothing
+		} else if (e >= 0 && e <= 9)
+			g_string_insert (dst, epos - dst->str + 1, "+0");
+		else if (e >= 10)
+			g_string_insert_c (dst, epos - dst->str + 1, '+');
+		else if (e >= -9 && e < 0)
+			g_string_insert_c (dst, epos - dst->str + 2, '0');
+		return;
+	} else {
+		g_assert (used_ryu);
+		// Else f-notation.  Redo.
+		int precision = MAX (0, ndec - e);
+		t = (t & 32) | 'F';
+		g_string_set_size (dst, oldlen);
+		fmt_fp (dst, d->ld, 1, precision, fl, t);
+	}
+}
+
+#ifdef GOFFICE_WITH_DECIMAL64
+static void
+fmt_d64 (GString *dst, const char *fmt, _Decimal64 d, int w, int p)
+{
+	// We're in here because we want ascii and round-away-from-zero handling
+	// For now we're punting.
+	GString *fmt2 = g_string_sized_new (100);
+	gboolean seen_dot = FALSE;
+	gboolean ascii = FALSE;
+	size_t oldlen = dst->len;
+
+	g_string_append_c (fmt2, '%');
+	while (*fmt) {
+		char c = *fmt++;
+		if (strchr ("0123456789+-aAeEfFgG" GO_DECIMAL64_MODIFIER, c))
+			g_string_append_c (fmt2, c);
+		else if (c == '.') {
+			g_string_append_c (fmt2, c);
+			seen_dot = TRUE;
+		} else if (c == '*') {
+			g_string_append_printf (fmt2, "%d", (seen_dot ? p : w));
+		} else if (strchr ("!=", c)) {
+			// Ignore, not relevant
+		} else if (c == '^') {
+			// FIXME: if sprintf starts rounding to even, fix needed here
+			// Ignore for now
+		} else if (c == ',') {
+			ascii = TRUE;
+		} else {
+			g_printerr ("Ignoring unexpected char '%c'\n", c);
+		}
+	}
+
+	g_string_append_printf (dst, fmt2->str, d);
+	g_string_free (fmt2, TRUE);
+
+	if (ascii) {
+		GString const *decimal = go_locale_get_decimal ();
+		char *dpos = strstr (dst->str + oldlen, decimal->str);
+		if (dpos && decimal->len) {
+			size_t pos = dpos - dst->str;
+			g_string_erase (dst, pos + 1, decimal->len - 1);
+			dst->str[pos] = '.';
+		}
+	}
+}
+#endif
 
 
 void
@@ -484,21 +639,19 @@ go_dtoa (GString *dst, const char *fmt, ...)
 {
 	int w, p, fl, t;
 	va_list args;
-	long double d;
-	gboolean is_long;
+	FloatValueType d;
+	FloatType fltyp;
 	gboolean debug = FALSE;
-	size_t oldlen;
 #ifdef ENSURE_FPU_STATE
 	fpu_control_t oldstate;
 	const fpu_control_t mask = _FPU_EXTENDED | _FPU_DOUBLE | _FPU_SINGLE;
 #endif
 
 	va_start (args, fmt);
-	parse_fmt (fmt, args, &is_long, &w, &p, &fl, &t, &d);
+	parse_fmt (fmt, args, &fltyp, &w, &p, &fl, &t, &d);
 	va_end (args);
 
-	if (fl & FLAG_SHORTEST) p = is_long ? 20 : 17;
-	oldlen = (fl & FLAG_TRUNCATE) ? 0 : dst->len;
+	if (fl & FLAG_TRUNCATE) g_string_truncate (dst, 0);
 
 #ifdef ENSURE_FPU_STATE
 	// fmt_fp depends on "long double" behaving right.  That means that the
@@ -512,50 +665,14 @@ go_dtoa (GString *dst, const char *fmt, ...)
 	}
 #endif
 
-	if (debug) g_printerr ("%Lg [%s] t=%c  p=%d\n", d, fmt, t, p);
-	fmt_fp (dst, d, w, p, fl, t);
-	if (debug) g_printerr ("  --> %s\n", dst->str);
-
-	if (fl & FLAG_SHORTEST) {
-		GString *alt = g_string_new (NULL);
-		const char *dec = (fl & FLAG_ASCII)
-			? "."
-			: go_locale_get_decimal()->str;
-		while (p > 0) {
-			ssize_t len_dif;
-			const char *dot = strstr (dst->str + oldlen, dec);
-			long double dalt;
-			if (!dot)
-				break;
-
-			/*
-			 * This is crude.  We have a dot, so try to render
-			 * the same number with less precision and check
-			 * that the result round-trips.
-			 */
-
-			fmt_fp (alt, d, w, p - 1, fl | FLAG_TRUNCATE, t);
-			len_dif = dst->len - oldlen - alt->len;
-
-			if (len_dif == 0) {
-				/* Same string so we've already removed 0s. */
-				break;
-			}
-
-			dalt = strto (alt->str, is_long, (fl & FLAG_ASCII));
-			if (dalt != d)
-				break;
-
-			g_string_truncate (dst, oldlen);
-			go_string_append_gstring (dst, alt);
-			if (debug) g_printerr ("  --> %s\n", dst->str);
-
-			p--;
-
-			if (len_dif > 1)
-				break;
-		}
-		g_string_free (alt, TRUE);
+	if (fl & FLAG_SHORTEST)
+		fmt_shortest (dst, &d, fl, t, fltyp);
+#ifdef GOFFICE_WITH_DECIMAL64
+	else if (fltyp == FP_DECIMAL64)
+		fmt_d64 (dst, fmt, d.d64, w, p);
+#endif
+	else {
+		fmt_fp (dst, d.ld, w, p, fl, t);
 	}
 
 #ifdef ENSURE_FPU_STATE
@@ -563,4 +680,6 @@ go_dtoa (GString *dst, const char *fmt, ...)
 		_FPU_SETCW (oldstate);
 	}
 #endif
+
+	if (debug) g_printerr ("  --> %s\n", dst->str);
 }

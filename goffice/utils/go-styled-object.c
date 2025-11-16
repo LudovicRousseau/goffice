@@ -1,5 +1,5 @@
 /*
- * go-styled-object.c :
+ * go-styled-object.c:
  *
  * Copyright (C) 2009 Jean Brefort (jean.brefort@normalesup.org)
  *
@@ -31,7 +31,7 @@
 
 
 /**
- * GOStyledObjectClass :
+ * GOStyledObjectClass:
  * @base: base class
  * @set_style: sets the object style.
  * @get_style: returns the object current style.
@@ -122,7 +122,7 @@ go_styled_object_set_style (GOStyledObject *gso, GOStyle *style)
  *
  * Simply an accessor function that returns @gso->style, without referencing it.
  *
- * Returns: (transfer none): the styled object's #GOStyle
+ * Returns: (transfer none) (nullable): the styled object's #GOStyle
  **/
 GOStyle*
 go_styled_object_get_style (GOStyledObject *gso)
@@ -140,7 +140,7 @@ go_styled_object_get_style (GOStyledObject *gso)
  * This function returns a new style that is initialized with the auto values for @gso.
  * Caller is responsible for the result.
  *
- * Returns: (transfer full): a new #GOStyle
+ * Returns: (transfer full) (nullable): a new #GOStyle
  **/
 GOStyle*
 go_styled_object_get_auto_style (GOStyledObject *gso)
@@ -156,7 +156,6 @@ go_styled_object_get_auto_style (GOStyledObject *gso)
  * @gso: a #GOStyledObject
  *
  * Called when the style changed. Might emit a signal if meaningful.
- *
  **/
 void
 go_styled_object_style_changed (GOStyledObject *gso)
@@ -174,7 +173,6 @@ go_styled_object_style_changed (GOStyledObject *gso)
  *
  * Apply appropriate theme @style if meaningful, i.e. properties with
  * auto flag set to %TRUE should be changed to default theme value.
- *
  **/
 void
 go_styled_object_apply_theme (GOStyledObject *gso, GOStyle *style)
@@ -190,10 +188,10 @@ go_styled_object_apply_theme (GOStyledObject *gso, GOStyle *style)
  *
  * A #GODoc is necessary to store images. If no GODoc is associated with the
  * object, image filling will not be supported.
- * Returns: (transfer none): he #GODoc associated with the object if any.
+ * Returns: (transfer none) (nullable): the #GODoc associated with the
+ * object if any.
  **/
-
-GODoc*
+GODoc *
 go_styled_object_get_document (GOStyledObject *gso)
 {
 	GOStyledObjectClass *klass = GO_STYLED_OBJECT_GET_CLASS (gso);
@@ -203,7 +201,7 @@ go_styled_object_get_document (GOStyledObject *gso)
 }
 
 /**
- * go_styled_object_set_cairo_line :
+ * go_styled_object_set_cairo_line:
  * @so: #GOStyledObject
  * @cr: #cairo_t
  *
@@ -223,7 +221,7 @@ go_styled_object_set_cairo_line (GOStyledObject const *so, cairo_t *cr)
 }
 
 /**
- * go_styled_object_fill :
+ * go_styled_object_fill:
  * @so: #GOStyledObject
  * @cr: #cairo_t
  * @preserve: whether the current path should be preserved
@@ -241,4 +239,3 @@ go_styled_object_fill (GOStyledObject const *so, cairo_t *cr, gboolean preserve)
 	style = go_styled_object_get_style (GO_STYLED_OBJECT (so));
 	go_style_fill (style, cr, preserve);
 }
-

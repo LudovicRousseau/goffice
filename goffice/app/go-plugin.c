@@ -427,7 +427,7 @@ go_plugin_get_textdomain (GOPlugin *plugin)
  * go_plugin_is_active:
  * @plugin: #GOPlugin
  *
- * Returns: TRUE if @plugin is active and FALSE otherwise.
+ * Returns: %TRUE if @plugin is active and %FALSE otherwise.
  **/
 gboolean
 go_plugin_is_active (GOPlugin *plugin)
@@ -531,7 +531,7 @@ go_plugin_get_name (GOPlugin *plugin)
  * go_plugin_get_description:
  * @plugin: #GOPlugin
  *
- * Returns: textual description of @plugin or NULL if description is not
+ * Returns: textual description of @plugin or %NULL if description is not
  * 	available.  Returned string stays valid during @plugin's lifetime.
  **/
 gchar const *
@@ -549,7 +549,7 @@ go_plugin_get_description (GOPlugin *plugin)
  * go_plugin_is_loaded:
  * @plugin: #GOPlugin
  *
- * Returns: TRUE if @plugin is loaded and FALSE otherwise.
+ * Returns: %TRUE if @plugin is loaded and %FALSE otherwise.
  **/
 gboolean
 go_plugin_is_loaded (GOPlugin *plugin)
@@ -1110,7 +1110,7 @@ go_plugin_deactivate (GOPlugin *plugin, GOErrorInfo **ret_error)
  *
  * Tells if the plugin can be deactivated using go_plugin_deactivate.
  *
- * Returns: TRUE if @plugin can be deactivated and FALSE otherwise.
+ * Returns: %TRUE if @plugin can be deactivated and %FALSE otherwise.
  */
 gboolean
 go_plugin_can_deactivate (GOPlugin *plugin)
@@ -1600,7 +1600,7 @@ go_plugins_get_active_plugins (void)
  * go_plugins_get_plugin_by_id:
  * @plugin_id: String containing plugin ID
  *
- * Returns: (transfer none): GOPlugin object for plugin with ID equal to @plugin_id or NULL
+ * Returns: (transfer none): GOPlugin object for plugin with ID equal to @plugin_id or %NULL
  * 	if there's no plugin available with given id.  Function returns
  * 	"borrowed" reference, use g_object_ref if you want to be sure that
  * 	plugin won't disappear.

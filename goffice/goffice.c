@@ -202,6 +202,9 @@ libgoffice_init (void)
 	_go_string_init ();
 	_go_conf_init ();
 	_go_fonts_init ();
+#ifdef GOFFICE_WITH_DECIMAL64
+	_go_decimal_init ();
+#endif
 	_go_math_init ();
 	_go_rsm_init ();
 	go_register_ui_files ();
@@ -240,7 +243,9 @@ libgoffice_init (void)
 	g_type_ensure (GO_TYPE_EMF);
 	g_type_ensure (GO_TYPE_PIXBUF);
 	g_type_ensure (GO_TYPE_SPECTRE);
+#ifdef GOFFICE_WITH_SVG
 	g_type_ensure (GO_TYPE_SVG);
+#endif /* GOFFICE_WITH_SVG */
 
 	_gog_themes_init ();
 	_go_number_format_init ();
@@ -263,6 +268,9 @@ libgoffice_shutdown (void)
 	_gog_themes_shutdown ();
 	_go_glib_extras_shutdown ();
 	_go_fonts_shutdown ();
+#ifdef GOFFICE_WITH_DECIMAL64
+	_go_decimal_shutdown ();
+#endif
 	_go_conf_shutdown ();
 #ifdef GOFFICE_WITH_GTK
 	_go_gtk_shutdown ();

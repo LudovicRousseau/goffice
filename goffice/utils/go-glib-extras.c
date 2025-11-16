@@ -246,7 +246,7 @@ go_strescape (GString *target, char const *string)
 
 /*
  * The reverse operation of go_strescape.  Returns a pointer to the
- * first char after the string on success or NULL on failure.
+ * first char after the string on success or %NULL on failure.
  *
  * First character of the string should be an ASCII character used
  * for quoting.
@@ -443,7 +443,7 @@ struct _GOMemChunk {
 
 
 GOMemChunk *
-go_mem_chunk_new (char const *name, size_t user_atom_size, size_t chunk_size)
+go_mem_chunk_new (char const *name, gsize user_atom_size, gsize chunk_size)
 {
 	int atoms_per_block;
 	GOMemChunk *res;
@@ -732,7 +732,7 @@ go_str_compare (void const *x, void const *y)
 
 
 const char *
-go_guess_encoding (const char *raw, size_t len, const char *user_guess,
+go_guess_encoding (const char *raw, gsize len, const char *user_guess,
 		   GString **utf8_str, guint *truncated)
 {
 	int try;
@@ -814,7 +814,7 @@ static char *go_real_name = NULL;
 /**
  * go_get_real_name:
  *
- * Returns: (transfer none): a utf8 encoded string with the current user name.
+ * Returns: (transfer none): a UTF-8 encoded string with the current user name.
  **/
 char const *
 go_get_real_name (void)
@@ -840,7 +840,7 @@ go_get_real_name (void)
 
 /**
  * go_destroy_password:
- * @passwd: The buffer to clear
+ * @passwd: (transfer none): The buffer to clear
  *
  * Overwrite a string holding a password.  This is a separate routine to
  * ensure that the compiler does not try to outsmart us.
@@ -852,6 +852,47 @@ go_destroy_password (char *passwd)
 {
 	memset (passwd, 0, strlen (passwd));
 }
+
+
+/**
+ * go_memdup:
+ * @mem: (nullable): Memory to copy
+ * @byte_size: size of memory block to copy
+ *
+ * Like g_memdup or g_memdup2.  This function is meant to ease transition
+ * to g_memdup2 without having to require very new glib.
+ **/
+gpointer
+go_memdup (gconstpointer mem, gsize byte_size)
+{
+	if (mem && byte_size != 0) {
+		gpointer new_mem = g_malloc (byte_size);
+		memcpy (new_mem, mem, byte_size);
+		return new_mem;
+	} else
+		return NULL;
+}
+
+/**
+ * go_memdup_n:
+ * @mem: (nullable): Memory to copy
+ * @n_blocks: Number of blocks to copy.
+ * @block_size: Number of bytes per blocks.
+ *
+ * Like go_memdup (@mem, @n_blocks * @block_size), but with overflow check.
+ * Like a potential future g_memdup_n.
+ **/
+gpointer
+go_memdup_n (gconstpointer mem, gsize n_blocks, gsize block_size)
+{
+	if (mem && n_blocks > 0 && block_size > 0) {
+		gpointer new_mem = g_malloc_n (n_blocks, block_size);
+		memcpy (new_mem, mem, n_blocks * block_size);
+		return new_mem;
+	} else
+		return NULL;
+}       
+
 
 
 /**
@@ -1040,7 +1081,7 @@ go_object_properties_apply (GObject *obj, GSList *props, gboolean changed_only)
  * @props: (element-type void): the list of properties and their values to
  * unset
  *
- * Unsezts the values in the list which needs to be a list of alternating
+ * Unsets the values in the list which needs to be a list of alternating
  * #GParamSpec and #GValue.
  **/
 void

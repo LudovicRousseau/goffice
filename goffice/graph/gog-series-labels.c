@@ -49,7 +49,7 @@ static GObjectClass *series_labels_parent_klass;
  * @GOG_SERIES_LABELS_NEAR_ORIGIN: near origin.
  **/
 
-struct {
+static const struct {
 	char const *label;
 	GogSeriesLabelsPos pos;
 } positions [] =
@@ -1242,7 +1242,8 @@ gog_series_labels_update (GogObject *obj)
 						case 0: /* protect from an unexpected string end */
 							break;
 						case 'c':
-							next = GO_IS_DATA (labels->custom_labels[0].data)?
+							next = (GO_IS_DATA (labels->custom_labels[0].data) &&
+							        go_data_get_vector_size (labels->custom_labels[0].data) > i)?
 									go_data_get_vector_string (labels->custom_labels[0].data, i):
 									NULL;
 							if (next) {

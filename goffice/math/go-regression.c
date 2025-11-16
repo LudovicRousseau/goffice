@@ -32,6 +32,20 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+// We need multiple versions of this code.  We're going to include ourself
+// with different settings of various macros.  gdb will hate us.
+#include <goffice/goffice-multipass.h>
+
+#ifdef SKIP_THIS_PASS
+
+// Stub for the benefit of gtk-doc
+GType INFIX(go_regression_stat,_get_type) (void);
+GType INFIX(go_regression_stat,_get_type) (void) { return 0; }
+
+#else
+
+/* ------------------------------------------------------------------------- */
+
 /**
  * GORegressionResult:
  * @GO_REG_ok: success.
@@ -85,48 +99,9 @@
  * @var: the variance of the entire regression: sum(errors^2)/(n-xdim).
  **/
 
-/* ------------------------------------------------------------------------- */
-/* Self-inclusion magic.  */
+#define DEFAULT_THRESHOLD (256 * DOUBLE_EPSILON)
 
-#ifndef DOUBLE
-
-#define DEFAULT_THRESHOLD (256 * DOUBLE_EPS)
-
-
-#define DEFINE_COMMON
-#define DOUBLE double
-#define DOUBLE_EPS DBL_EPSILON
-#define SUFFIX(_n) _n
-#define FORMAT_f "f"
-#define FORMAT_g "g"
-
-#ifdef GOFFICE_WITH_LONG_DOUBLE
-
-#include "go-regression.c"
-#undef DEFINE_COMMON
-#undef DOUBLE
-#undef DOUBLE_EPS
-#undef SUFFIX
-#undef FORMAT_f
-#undef FORMAT_g
-#ifdef HAVE_SUNMATH_H
-#include <sunmath.h>
-#endif
-#define DOUBLE long double
-#define DOUBLE_EPS LDBL_EPSILON
-#define SUFFIX(_n) _n ## l
-#define FORMAT_f "Lf"
-#define FORMAT_g "Lg"
-#else
-/* It appears that gtk-doc is too dumb to handle this file.  Provide
-   a dummy type getter to make things work.  */
-GType go_regression_statl_get_type (void);
-GType go_regression_statl_get_type (void) { return G_TYPE_NONE; }
-#endif
-
-#endif
-
-/* Boxed types code */
+// Boxed types code
 
 static SUFFIX(go_regression_stat_t) *
 SUFFIX(go_regression_stat_ref) (SUFFIX(go_regression_stat_t)* state)
@@ -136,21 +111,13 @@ SUFFIX(go_regression_stat_ref) (SUFFIX(go_regression_stat_t)* state)
 }
 
 GType
-#ifdef DEFINE_COMMON
-go_regression_stat_get_type (void)
-#else
-go_regression_statl_get_type (void)
-#endif
+INFIX(go_regression_stat,_get_type) (void)
 {
 	static GType t = 0;
 
 	if (t == 0) {
 		t = g_boxed_type_register_static (
-#ifdef DEFINE_COMMON
-		     "go_regression_stat_t",
-#else
-		     "go_regression_stat_tl",
-#endif
+		     "go_regression_stat_t" SUFFIX_STR,
 			 (GBoxedCopyFunc)SUFFIX(go_regression_stat_ref),
 			 (GBoxedFreeFunc)SUFFIX(go_regression_stat_destroy));
 	}
@@ -253,8 +220,7 @@ go_regression_statl_get_type (void)
  *
  */
 
-static SUFFIX(GOQuadMatrix)
-*
+static SUFFIX(GOQuadMatrix) *
 SUFFIX(quad_matrix_from_matrix) (CONSTMATRIX A, int m, int n, DOUBLE *scale)
 {
 	int i, j;
@@ -487,11 +453,11 @@ SUFFIX(calc_scale) (const DOUBLE *xs, int m)
 
 	/*
 	 * Pick a scale such that the largest value will be in the
-	 * range [1;2[.  The scale will be a power of 2 so scaling
-	 * doesn't introduce rounding errors of it own.
+	 * range [1;RADIX[.  The scale will be a power of radix so
+	 * scaling doesn't introduce rounding errors of it own.
 	 */
-	(void) SUFFIX(frexp) (M, &e);
-	return SUFFIX(ldexp) (1.0, e - 1);
+	(void)UNSCALBN (M, &e);
+	return SUFFIX(scalbn) (1.0, e - 1);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -769,7 +735,7 @@ SUFFIX(log_fitting) (DOUBLE *xs, const DOUBLE *ys, int n,
 	SUFFIX(modf) (c_accuracy, &c_accuracy_int);
 	c_accuracy = c_accuracy_int;
 	c_accuracy = SUFFIX(pow) (10, c_accuracy);
-	c_accuracy *= GO_LOGFIT_C_ACCURACY;
+	c_accuracy *= (DOUBLE)GO_LOGFIT_C_ACCURACY;
 
 	/* Determine sign. Take a c which is ``much to small'' since the part
 	 * of the curve cutting the point cloud is almost not bent.
@@ -777,8 +743,8 @@ SUFFIX(log_fitting) (DOUBLE *xs, const DOUBLE *ys, int n,
 	 * assume that we have to change the direction of curve bending
 	 * by changing sign.
 	 */
-	c_step = x_range * GO_LOGFIT_C_STEP_FACTOR;
-	c_range = x_range * GO_LOGFIT_C_RANGE_FACTOR;
+	c_step = x_range * (DOUBLE)GO_LOGFIT_C_STEP_FACTOR;
+	c_range = x_range * (DOUBLE)GO_LOGFIT_C_RANGE_FACTOR;
 	res[0] = 1; /* sign */
 	res[3] = point_cloud->min_x - c_range;
 	temp_res[0] = 1;
@@ -866,7 +832,7 @@ SUFFIX(log_fitting) (DOUBLE *xs, const DOUBLE *ys, int n,
 	SUFFIX(transform_x_and_linear_regression_log_fitting) (xs, transf_xs, ys, n,
 						       res, point_cloud);
 
-	if ((res[0] * (res[3] - c_end)) < (1.1 * c_accuracy)) {
+	if ((res[0] * (res[3] - c_end)) < (CONST(1.1) * c_accuracy)) {
 	        /* Allowing for some inaccuracy, we are at the end of the
 		 * range, so this is probably no local minimum.
 		 * The start of the range has been checked above. */
@@ -888,7 +854,7 @@ SUFFIX(log_fitting) (DOUBLE *xs, const DOUBLE *ys, int n,
  * @n: number of data points.
  * @affine: if true, a non-zero constant is allowed.
  * @res: (out): place for constant[0] and slope1[1], slope2[2],... There will be dim+1 results.
- * @stat_: (out): non-NULL storage for additional results.
+ * @stat_: (out): storage for additional results.
  *
  * Performs multi-dimensional linear regressions on the input points.
  * Fits to "y = b + a1 * x1 + ... ad * xd".
@@ -939,7 +905,7 @@ SUFFIX(go_linear_regression) (MATRIX xss, int dim,
  * @n: number of data points
  * @affine: if %TRUE, a non-one multiplier is allowed
  * @res: output place for constant[0] and root1[1], root2[2],... There will be dim+1 results.
- * @stat_: non-NULL storage for additional results.
+ * @stat_: (out) (optional): storage for additional results.
  *
  * Performs one-dimensional linear regressions on the input points.
  * Fits to "y = b * m1^x1 * ... * md^xd " or equivalently to
@@ -972,7 +938,7 @@ SUFFIX(go_exponential_regression) (MATRIX xss, int dim,
  * @n: number of data points
  * @affine: if %TRUE, a non-one multiplier is allowed
  * @res: output place for constant[0] and root1[1], root2[2],... There will be dim+1 results.
- * @stat_: non-NULL storage for additional results.
+ * @stat_: (out) (optional): storage for additional results.
  *
  * Performs one-dimensional linear regressions on the input points as
  * go_exponential_regression, but returns the logarithm of the coefficients instead
@@ -1040,7 +1006,7 @@ SUFFIX(go_exponential_regression_as_log) (MATRIX xss, int dim,
  * @n: number of data points
  * @affine: if %TRUE, a non-one multiplier is allowed
  * @res: output place for constant[0] and root1[1], root2[2],... There will be dim+1 results.
- * @stat_: non-NULL storage for additional results.
+ * @stat_: (out) (optional): storage for additional results.
  *
  * Performs one-dimensional linear regressions on the input points.
  * Fits to "y = b * x1^m1 * ... * xd^md " or equivalently to
@@ -1119,7 +1085,7 @@ SUFFIX(go_power_regression) (MATRIX xss, int dim,
  * @n: number of data points
  * @affine: if %TRUE, a non-zero constant is allowed
  * @res: output place for constant[0] and factor1[1], factor2[2],... There will be dim+1 results.
- * @stat_: non-NULL storage for additional results.
+ * @stat_: (out) (optional): storage for additional results.
  *
  * This is almost a copy of linear_regression and produces multi-dimensional
  * linear regressions on the input points after transforming xss to ln(xss).
@@ -1298,7 +1264,7 @@ SUFFIX(go_regression_stat_destroy) (SUFFIX(go_regression_stat_t) *stat_)
 /* ------------------------------------------------------------------------- */
 
 #ifdef DEFINE_COMMON
-#define DELTA      0.01
+#define DELTA      CONST(0.01)
 /* FIXME:  I pulled this number out of my hat.
  * I need some testing to pick a sensible value.
  */
@@ -1587,28 +1553,6 @@ SUFFIX(parameter_errors) (SUFFIX(GORegressionFunction) f,
  * values.
  * The resulting parameters are placed back into @par.
  **/
-/**
- * go_non_linear_regressionl:
- * @f: (scope call): the model function
- * @xvals: independent values.
- * @par: model parameters.
- * @yvals: dependent values.
- * @sigmas: stahdard deviations for the dependent values.
- * @x_dim: Number of data points.
- * @p_dim: Number of parameters.
- * @chi: Chi Squared of the final result.  This value is not very
- * meaningful without the sigmas.
- * @errors: MUST ALREADY BE ALLOCATED.  These are the approximated standard
- * deviation for each parameter.
- *
- * SYNOPSIS:
- *   result = non_linear_regression (f, xvals, par, yvals, sigmas,
- *                                   x_dim, p_dim, &chi, errors)
- * Non linear regression.
- * Returns: the results of the non-linear regression from the given initial
- * values.
- * The resulting parameters are placed back into @par.
- **/
 GORegressionResult
 SUFFIX(go_non_linear_regression) (SUFFIX(GORegressionFunction) f,
 				  MATRIX xvals, /* The entire data set. */
@@ -1831,3 +1775,11 @@ SUFFIX(go_matrix_pseudo_inverse) (CONSTMATRIX A, int m, int n,
 	}
 	SUFFIX(go_quad_end) (state);
 }
+
+/* ------------------------------------------------------------------------- */
+
+// See comments at top
+#endif // SKIP_THIS_PASS
+#if INCLUDE_PASS < INCLUDE_PASS_LAST
+#include __FILE__
+#endif

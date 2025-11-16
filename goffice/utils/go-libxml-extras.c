@@ -45,7 +45,7 @@
  * Note: this reads the entire file into memory and should therefore
  * not be used for user-supplied files.
  *
- * Returns: (transfer full): A libxml2 xmlDocPtr or %NULL.
+ * Returns: (transfer full) (nullable): A libxml2 xmlDocPtr or %NULL.
  **/
 xmlDocPtr
 go_xml_parse_file (char const *filename)
@@ -69,7 +69,7 @@ go_xml_parse_file (char const *filename)
  * Get an xmlChar * value for a node carried as an attibute
  * result must be xmlFree
  *
- * Returns: (transfer full): the attribute value
+ * Returns: (transfer full) (nullable): the attribute value
  */
 xmlChar *
 go_xml_node_get_cstr (xmlNodePtr node, char const *name)
@@ -160,7 +160,7 @@ go_xml_node_get_double (xmlNodePtr node, char const *name, double *val)
 
 void
 go_xml_node_set_double (xmlNodePtr node, char const *name, double val,
-		     int precision)
+			int precision)
 {
 	char str[101 + DBL_DIG];
 
@@ -252,7 +252,7 @@ go_xml_node_set_enum (xmlNodePtr node, char const *name, GType etype, gint val)
  * @tree: #xmlNode
  * @name: child name
  *
- * Returns: (transfer none): the child with @name as name if any.
+ * Returns: (transfer none) (nullable): the child with @name as name if any.
  **/
 xmlNode *
 go_xml_get_child_by_name (xmlNode const *parent, char const *child_name)
@@ -275,8 +275,8 @@ go_xml_get_child_by_name (xmlNode const *parent, char const *child_name)
  * @tree: #xmlNode
  * @name: child name
  *
- * Returns: (transfer none): the child with @name as name and withou "xml:lang"
- * attribute if any.
+ * Returns: (transfer none) (nullable): the child with @name as name and
+ * without "xml:lang" attribute if any.
  **/
 xmlNode *
 go_xml_get_child_by_name_no_lang (xmlNode const *parent, char const *name)
@@ -307,8 +307,8 @@ go_xml_get_child_by_name_no_lang (xmlNode const *parent, char const *name)
  * @tree: #xmlNode
  * @name: child name
  *
- * Returns: (transfer none): the child with @name as name and with "xml:lang"
- * attribute corresponding to the preferred language.
+ * Returns: (transfer none) (nullable): the child with @name as name and
+ * with "xml:lang" attribute corresponding to the preferred language.
  **/
 xmlNode *
 go_xml_get_child_by_name_by_lang (xmlNode const *parent, gchar const *name)
@@ -385,6 +385,25 @@ go_xml_out_add_long_double (GsfXMLOut *output, char const *id, long double ld)
 }
 #endif
 
+#ifdef GOFFICE_WITH_DECIMAL64
+/**
+ * go_xml_out_add_decimal64:
+ * @output: destination
+ * @id: (allow-none): attribute name
+ * @d: value
+ *
+ * Output a representation of @d that will be read back without loss of
+ * precision.
+ */
+void
+go_xml_out_add_decimal64 (GsfXMLOut *output, char const *id, _Decimal64 d)
+{
+	GString *str = g_string_new (NULL);
+	go_dtoa (str, "!" GO_DECIMAL64_MODIFIER "g", d);
+	gsf_xml_out_add_cstr (output, id, str->str);
+	g_string_free (str, TRUE);
+}
+#endif
 
 void
 go_xml_out_add_color (GsfXMLOut *output, char const *id, GOColor c)

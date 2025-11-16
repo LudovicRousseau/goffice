@@ -1,3 +1,386 @@
+2025-03-05  Morten Welinder  <terra@gnome.org>
+
+	* goffice/utils/go-format.c (go_format_execute): Fix fraction
+	problem.
+
+2025-03-01  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2025-03-01  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.59
+
+2025-03-01  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2025-01-25  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.58
+
+2024-02-11  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2024-02-11  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.57
+
+2024-01-22  Morten Welinder  <terra@gnome.org>
+
+	* goffice/math/go-dtoa.c (fmt_shortest): Fix problem with
+	Decimal64 number going into E format.
+
+	* goffice/math/go-decimal.c (nextafterD): Fix assert with very
+	large arguments.
+
+2023-12-03  Morten Welinder  <terra@gnome.org>
+
+	* goffice/math/go-dtoa.c (parse_fmt): Fix width parsing (which we
+	evidently aren't using that much).
+
+2023-11-02  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2023-11-02  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.56
+
+2023-03-28  Morten Welinder  <terra@gnome.org>
+
+	* plugins/plot_distrib/gog-histogram.c
+	(gog_histogram_plot_update): Fix crash with no series.  See #66.
+
+2023-02-02  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2023-02-02  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.55
+
+2023-01-23  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2023-01-19  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.54
+
+2023-01-18  Morten Welinder  <terra@gnome.org>
+
+	* goffice/canvas/goc-item.c (goc_item_bounds_changed): Don't
+	invalidate twice.
+
+	* goffice/utils/go-format.c (go_format_execute): Avoid integer
+	overflow when dealing with denominators.
+
+2022-12-28  Morten Welinder  <terra@gnome.org>
+
+	* goffice/math/go-accumulator.c (go_accumulator_add): Catch
+	non-finite numbers early.
+
+2022-11-29  Morten Welinder  <terra@gnome.org>
+
+	* goffice/graph/gog-series.c (role_series_labels_can_add): Allow
+	multiple data labels.  See #64.
+
+2022-10-22  Morten Welinder  <terra@gnome.org>
+
+	* goffice/math/go-math.c (go_pow10l): Make the table cover the
+	full range of long double.
+
+2022-09-17  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2022-09-17  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.53
+
+2022-08-29  Morten Welinder  <terra@gnome.org>
+
+	* plugins/plot_xy/gog-xy-dropbar.c (gog_xy_dropbar_view_render):
+	Fix typo.  Fixes crash in Gnumeric #667.
+
+2022-04-18  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2022-04-18  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.52
+
+2022-02-17  Morten Welinder  <terra@gnome.org>
+
+	* goffice/math/go-math.c (go_add_epsilon): Fix fallback code.
+
+2022-01-21  Morten Welinder  <terra@gnome.org>
+
+	* goffice/gtk/go-action-combo-stack.c: Reimplement based on
+	GtkComboBox.
+
+2022-01-20  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2022-01-20  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.51
+
+2021-12-26  Morten Welinder  <terra@gnome.org>
+
+	* goffice/canvas/goc-group.c (goc_group_fake_xchildren): Plug
+	leak.
+
+2021-12-02  Morten Welinder  <terra@gnome.org>
+
+	* goffice/utils/go-glib-extras.c (go_memdup_n): New function.
+
+	* goffice/utils/go-spectre.c (go_spectre_load_data): Use go_memdup.
+
+	* goffice/utils/go-emf.c (go_emf_load_data): Use go_memdup.
+	(go_emf_new_from_data): Ditto.
+
+	* goffice/component/go-component.c (go_component_duplicate): Use
+	go_memdup.
+
+	* goffice/data/go-data-simple.c (go_data_vector_str_new_copy): Use
+	g_new, not g_malloc.
+	(go_data_vector_val_new_copy): Use go_memdup_n.
+
+	* goffice/canvas/goc-group.c (goc_group_init): Use g_new0, not
+	g_malloc0.
+
+2021-12-01  Morten Welinder  <terra@gnome.org>
+
+	* goffice/utils/go-glib-extras.c (go_memdup): Replacement for
+	g_memdup until we depend on glib 2.67 or thereabouts.
+
+2021-11-06  Morten Welinder  <terra@gnome.org>
+
+	* goffice/math/go-math.c (go_pow10): Make a much bigger table to
+	avoid depending on pow.
+
+2021-08-28  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/graph/gog-renderer.c (gog_renderer_draw_data_label): draw
+	background and outline for data labels.
+	* plugins/plot_xy/gog-xy.c (gog_xy_view_render): typo.
+
+2021-06-11  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* plugins/plot_xy/gog-xy.c (gog_xy_view_render): do not clip markers. #584.
+
+2021-06-10  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2021-06-10  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.50
+
+2021-05-27  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/canvas/goc-graph.c (goc_graph_draw): fix rendering on high
+	resolution monitors when scale is not 1. #578.
+
+2021-05-12  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* plugins/plot_surface/gog-matrix.c (gog_matrix_view_render): call the
+	build_matrix method for the real plot type. Fixes Debian #988397.
+
+2021-04-26  Morten Welinder  <terra@gnome.org>
+
+	* goffice/gtk/go-format-sel.c (set_format_category): This takes a
+	family, not a row number.  Handle that properly.
+
+2021-03-22  Morten Welinder  <terra@gnome.org>
+
+	* plugins/reg_linear/gog-lin-reg.c
+	(gog_lin_reg_curve_get_equation): If x-axis is a date axis, use an
+	equation that effectively says y=a * #days + b where #days is
+	counted from the left edge, not the arbitrary zero date in year
+	1900.
+
+2021-03-17  Morten Welinder  <terra@gnome.org>
+
+	* goffice/gtk/go-format-sel.c: Get rid of empty categories.  (That
+	means "Special" which we never filled in.  See #29.)
+
+	* goffice/graph/gog-label.c (gog_reg_eqn_get_str): Show only three
+	decimals for R^2.
+
+	* plugins/reg_linear/gog-lin-reg.c
+	(gog_lin_reg_curve_get_equation): Simplify code using fewer
+	branches.
+
+2021-03-14  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2021-03-14  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.49
+
+2020-09-26  Morten Welinder  <terra@gnome.org>
+
+	* goffice/graph/gog-axis-line.c (gog_axis_line_update_ticks): Zero
+	tick count when we dispose of ticks.  Fixes Gnumeric #524.
+	(gog_axis_line_discard_ticks): Factor this repeated segment out.
+
+2020-08-29  Morten Welinder  <terra@gnome.org>
+
+	* goffice/utils/go-format.c (go_format_output_simple_to_odf):
+	Close <text> item.  Fixes Gnumeric #518.
+
+2020-08-12  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2020-08-12  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.48
+
+2020-07-15  Morten Welinder  <terra@gnome.org>
+
+	* goffice/graph/gog-object-xml.c (gogo_prop_end): Handle
+	translated booleans since we've managed to save some files that
+	way.
+
+	* goffice/utils/go-file.c (go_file_get_owner_name)
+	(go_file_get_group_name): Plug leak.
+
+2020-06-26  Morten Welinder  <terra@gnome.org>
+
+	* configure.ac (xrender): Stop checking for xrender.  We haven't
+	needed that for a decade or two.
+
+2020-06-22  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/canvas/*: enable GocGroup to work as a widgtless canvas.
+	* goffice/utils/go-emf.c: replace the canvas by a GocGroup.
+	* goffice/utils/go-image.c (go_image_new_from_data),
+	(go_image_type_for_format): ditto.
+	* tests/mf-demo.c (open_file): ditto.
+
+2020-06-15  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/utils/go-emf.c (go_emf_bitblt): implement filling with a solid
+	brush.
+	* goffice/utils/go-image.c (go_mime_to_image_format): update the EMF and
+	WMF mime types.
+
+2020-06-13  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/gtk/go-font-sel-dialog.c (gfsd_class_init): fix more
+	criticals with Gtk+ >= 3.24.
+
+2020-06-02  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/graph/gog-grid-line.c (gog_grid_line_xy_render): clip grid lines
+	rendering to the plot area. [#50]
+
+2020-06-01  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/canvas/goc-canvas.c (size_changed_cb): revert previous change.
+
+2020-06-01  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/canvas/goc-canvas.c (size_changed_cb): optimize GtkWidget
+	embedding in the canvas. See #465.
+	* goffice/canvas/goc-widget.c (goc_widget_connect_signals),
+	(goc_widget_notify_scrolled), (cb_canvas_changed),
+	(goc_widget_set_widget), (goc_widget_draw):
+
+2020-05-27  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* plugins/reg_logfit/gog-logfit.c (gog_log_fit_curve_update): don't emit a
+	critical if the series is not valid. [#49]
+
+2020-05-18  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* plugins/plot_xy/gog-xy.c (gog_xy_view_render): keep clipping for data
+	labels. [#47]
+
+2020-05-14  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/data/go-data.c (go_data_unserialize): don't load an invalid
+	empty string. [#46]
+	* goffice/graph/gog-object-xml.c (gog_dataset_sax_save): don't save any
+	void data. [#46]
+	* goffice/gtk/go-font-sel.c (gfs_get_property), (gfs_set_property),
+	(gfs_class_init): fix criticals with Gtk+ >= 3.24.
+
+2020-05-09  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2020-05-09  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.47
+
+2020-04-29  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/component/go-component.c (go_component_duplicate): do not destroy
+	original data. Fix #483.
+
+2020-04-28  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/graph/gog-axis-line.c
+	(gog_axis_base_get_clamped_position): fix crossing axis position. [#45]
+
+2020-04-19  Morten Welinder  <terra@gnome.org>
+
+	* goffice/gtk/goffice-gtk.c (cb_format_combo_changed): Take
+	auto-by-extension into account.
+
+2020-04-09  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/graph/gog-series.c (gog_series_dataset_dim_changed): check
+	validity when the data change. Fix #468.
+
+2020-04-09  Jean Brefort  <jean.brefort@normalesup.org>
+
+	reviewed by: <delete if not using a buddy>
+
+	* goffice/graph/gog-series.c (gog_series_check_validity): ensure all
+	required dims has valid data. Fix #466.
+	* plugins/plot_barcol/gog-1.5d.c (gog_1_5d_enum_in_reverse): fix legend
+	order in bar plots.
+
+2020-03-09  Morten Welinder  <terra@gnome.org>
+
+	* goffice/utils/go-file.c (go_url_check_extension): Make new_uri
+	optional.
+
+2020-01-11  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* plugins/plot_surface/gog-contour.c (gog_contour_view_render): fix a
+	drawing error in contour plots. Fix #458
+
+2019-12-13  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/graph/gog-series-labels.c (gog_series_labels_update):
+	a better fix.
+
+2019-12-13  Jean Brefort  <jean.brefort@normalesup.org>
+
+	* goffice/graph/gog-series-labels.c (gog_series_labels_update):
+	fix warnings when the vector length is nil. See #426.
+	* plugins/plot_xy/gog-xy.c (gog_xy_view_render): do not process labels
+	if the series does not contain any valid data. Fix #426.
+
+2019-11-06  Morten Welinder <terra@gnome.org>
+
+	* configure.ac: Post-release bump.
+
+2019-11-06  Morten Welinder <terra@gnome.org>
+
+	* Release 0.10.46
+
 2019-07-02  Morten Welinder  <terra@gnome.org>
 
 	* goffice/utils/go-format.c (go_format_execute): Fix UTF-8 problem
@@ -479,7 +862,7 @@
 2016-01-01 Andreas J. Guelzow <aguelzow@pyrshep.ca>
 
 	* utils/go-format.c (go_format_output_date_to_odf): write
-	gnm:am-suffix and gnm:pm-suffix attributes instead of the 
+	gnm:am-suffix and gnm:pm-suffix attributes instead of the
 	gnm:style attribute for number:style
 
 2016-01-01 Andreas J. Guelzow <aguelzow@pyrshep.ca>

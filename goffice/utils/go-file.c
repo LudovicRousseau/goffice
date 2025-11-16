@@ -494,7 +494,7 @@ go_shell_arg_to_uri (char const *arg)
  * Decode the final path component.  Returns as UTF-8 encoded suitable
  * for display.
  *
- * Returns: a string that the caller is responsible for freeing.
+ * Returns: (transfer full): UTF-8 encoded basename.
  **/
 char *
 go_basename_from_uri (char const *uri)
@@ -508,12 +508,12 @@ go_basename_from_uri (char const *uri)
 /**
  * go_dirname_from_uri:
  * @uri: target
- * @brief: if TRUE, hide "file://" if present.
+ * @brief: if %TRUE, hide "file://" if present.
  *
  * Decode the all but the final path component.  Returns as UTF-8 encoded
  * suitable for display.
  *
- * Returns: dirname which the caller is responsible for freeing.
+ * Returns: (transfer full): UTF-8 encoded directory part.
  **/
 char *
 go_dirname_from_uri (char const *uri, gboolean brief)
@@ -721,6 +721,7 @@ go_file_get_owner_name (char const *uri)
 	name = g_file_info_get_attribute_string (info, G_FILE_ATTRIBUTE_OWNER_USER);
 	(void) go_guess_encoding (name, strlen (name),
 				  NULL, &nameutf8, NULL);
+	g_object_unref (info);
 	return (nameutf8 ? g_string_free (nameutf8, FALSE) : NULL);
 }
 
@@ -747,6 +748,7 @@ go_file_get_group_name (char const *uri)
 	name = g_file_info_get_attribute_string (info, G_FILE_ATTRIBUTE_OWNER_GROUP);
 	(void) go_guess_encoding (name, strlen (name),
 				  NULL, &nameutf8, NULL);
+	g_object_unref (info);
 	return (nameutf8 ? g_string_free (nameutf8, FALSE) : NULL);
 }
 
@@ -975,8 +977,8 @@ go_file_get_date_changed (char const *uri)
  *
  * Determine the last modification time of @uri.
  *
- * Returns: (transfer full): the modification time of the file, or %NULL
- * if it could not be determined.
+ * Returns: (transfer full) (nullable): the modification time of the
+ * file.
  **/
 GDateTime *
 go_file_get_modtime (char const *uri)
@@ -990,9 +992,13 @@ go_file_get_modtime (char const *uri)
 				  G_FILE_ATTRIBUTE_TIME_MODIFIED_USEC,
 				  G_FILE_QUERY_INFO_NONE, NULL, NULL);
 	if (info) {
+#ifdef HAVE_G_FILE_INFO_GET_MODIFICATION_DATE_TIME
+		modtime = g_file_info_get_modification_date_time (info);
+#else
 		GTimeVal tv;
 		g_file_info_get_modification_time (info, &tv);
 		modtime = g_date_time_new_from_timeval_utc (&tv);
+#endif
 		g_object_unref (info);
 	}
 
@@ -1010,7 +1016,7 @@ go_file_get_modtime (char const *uri)
  *
  * url-encode a string according to RFC 2368.
  *
- * Returns: an encoded string which the caller is responsible for freeing.
+ * Returns: (transfer full): encoded string.
  **/
 gchar*
 go_url_encode (gchar const *uri_fragment, int type)
@@ -1037,7 +1043,7 @@ go_url_encode (gchar const *uri_fragment, int type)
  * go_url_check_extension:
  * @uri: Uri
  * @std_ext: Standard extension for the content type
- * @new_uri: New uri
+ * @new_uri: (out) (optional) (nullable): New uri
  *
  * Modifies given @uri by adding the extension @std_ext if needed.
  * If no @std_ext is given or @uri already has some extension,
@@ -1046,7 +1052,7 @@ go_url_encode (gchar const *uri_fragment, int type)
  * Value in new_uri:  newly allocated string which you should free after
  *                    use, containing (optionally) modified uri.
  *
- * Return Value:  FALSE if the uri has an extension not matching @std_ext
+ * Return Value: %FALSE if the uri has an extension not matching @std_ext
  */
 gboolean
 go_url_check_extension (gchar const *uri,
@@ -1058,17 +1064,17 @@ go_url_check_extension (gchar const *uri,
 	gboolean res;
 
 	g_return_val_if_fail (uri != NULL, FALSE);
-	g_return_val_if_fail (new_uri != NULL, FALSE);
 
 	res      = TRUE;
 	base     = g_path_get_basename (uri);
 	user_ext = strrchr (base, '.');
-	if (std_ext != NULL && strlen (std_ext) > 0 && user_ext == NULL)
+	if (std_ext != NULL && strlen (std_ext) > 0 && !user_ext && new_uri)
 		*new_uri = g_strconcat (uri, ".", std_ext, NULL);
 	else {
 		if (user_ext != NULL && std_ext != NULL)
 			res = !go_utf8_collate_casefold (user_ext + 1, std_ext);
-		*new_uri = g_strdup (uri);
+		if (new_uri)
+			*new_uri = g_strdup (uri);
 	}
 	g_free (base);
 
@@ -1079,10 +1085,8 @@ go_url_check_extension (gchar const *uri,
  * go_get_mime_type:
  * @uri: the uri.
  *
- * returns: the mime type for the file as a newly allocated string. Needs to
- * be freed with g_free().
+ * Returns: (transfer full): the mime type for the file.
 **/
-
 gchar *
 go_get_mime_type (gchar const *uri)
 {
@@ -1140,8 +1144,7 @@ go_get_mime_type (gchar const *uri)
  * @data: the data.
  * @data_size: the data size
  *
- * returns: the mime type for the data as a newly allocated string. Needs to
- * be freed with g_free().
+ * Returns: (transfer full): the mime type for the data.
 **/
 gchar *
 go_get_mime_type_for_data (gconstpointer data, int data_size)
@@ -1179,11 +1182,10 @@ go_get_mime_type_for_data (gconstpointer data, int data_size)
  * go_mime_type_get_description:
  * @mime_type: the mime type to describe.
  *
- * returns: the description for the mime type as a newly allocated string.
- * Needs to be freed with g_free(). If the description is not found, the
- * mime type itself will be returned.
+ * Returns: (transfer full): the description for the mime type. If the
+ * description is not found, a copy of the mime type itself will be
+ * returned.
 **/
-
 gchar *
 go_mime_type_get_description (gchar const *mime_type)
 {

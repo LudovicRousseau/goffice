@@ -29,6 +29,7 @@
 /**
  * GogViewClass:
  * @base: base class.
+ * @clip: If %TRUE,  clip drawings to the view allocation.
  * @state_init: state intialization.
  * @padding_request: padding request.
  * @size_request: size request.
@@ -37,9 +38,6 @@
  * @build_toolkit: builds the associated toolkit.
  * @get_tip_at_point: gets tip at pointer position.
  * @natural_size: gets natural size.
- *
- * the GogViewClass::clip firled should be set to %TRUE to clip drawings to
- * the vew allocation.
  **/
 
 /**
@@ -264,6 +262,7 @@ static GogTool gog_tool_resize_object = {
  * @view: #GogView
  * @tool: #GogTool
  * @data: user data.
+ * @ref_count: internal.
  **/
 
 static GogToolAction *
@@ -1052,7 +1051,7 @@ gog_view_get_toolkit (GogView *view)
  * @view: #GogView
  * @x: in coords
  * @y: in coords
- * @gobj: pointed object or NULL
+ * @gobj: pointed object or %NULL
  *
  * Returns: (transfer none): tool under cursor for a given view, or %NULL
  **/
@@ -1083,8 +1082,8 @@ gog_view_get_tool_at_point (GogView *view, double x, double y, GogObject **gobj)
  * @view: #GogView
  * @x: cursor x position
  * @y: cursor y position
- * @obj: pointed object or NULL
- * @tool: pointed tool or NULL
+ * @obj: pointed object or %NULL
+ * @tool: pointed tool or %NULL
  *
  * Gets view under cursor, searching recursively from @view. Corresponding object
  * is stored in @obj. This object may or may not be @view->model of pointed view.
@@ -1133,7 +1132,7 @@ gog_view_get_view_at_point (GogView *view, double x, double y, GogObject **obj, 
  * Gets a tip string related to the position as defined by (@x,@y) in @view.
  *
  * return value: the newly allocated tip string if the view class supports
- * that or NULL.
+ * that or %NULL.
  **/
 char*
 gog_view_get_tip_at_point (GogView *view, double x, double y)

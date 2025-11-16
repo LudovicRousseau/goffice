@@ -51,8 +51,7 @@
  *
  * RFC4122 version 4 compliant random UUIDs generator.
  *
- * Returns: (transfer full): A string with RFC41122 version 4 random UUID,
- * must be freed with _free().
+ * Returns: (transfer full): A string with RFC4122 version 4 random UUID
  **/
 char *
 go_uuid (void)
@@ -69,7 +68,7 @@ go_uuid (void)
 		guint32 node_low;
 	} uuid;
 
-	/* Fill with random. Every new GRand are seede with 128 bit read from
+	/* Fill with random. Every new GRand are seeded with 128 bit read from
 	* /dev/urandom (or the current time on non-unix systems). This makes the
 	* random source good enough for our usage, but may not be suitable for all
 	* situation outside Gabble. */

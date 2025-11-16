@@ -1111,9 +1111,9 @@ update_cursor (GogGraphView *view, GogTool *tool, GdkWindow *window)
 
 	cursor_type = tool != NULL ? tool->cursor_type : GDK_LEFT_PTR;
 	if (cursor_type != view->cursor_type) {
+		GdkDisplay *display = gdk_window_get_display (window);
 		view->cursor_type = cursor_type;
-		/* FIXME: gdk_display_get_default is probably not a good idea */
-		cursor = gdk_cursor_new_for_display (gdk_display_get_default (), cursor_type);
+		cursor = gdk_cursor_new_for_display (display, cursor_type);
 		gdk_window_set_cursor (window, cursor);
 		g_object_unref (cursor);
 	}
@@ -1151,11 +1151,17 @@ gog_graph_view_handle_event (GogGraphView *view, GdkEvent *event,
 	GogObject *old_object = view->selected_object;
 	GogTool *tool = NULL;
 	GdkWindow *window = event->any.window;
-	double x, y;
+	double x, y, scale = 1;
 	int x_int, y_int;
 
 	x = event->button.x - x_offset;
 	y = event->button.y - y_offset;
+
+#if GTK_CHECK_VERSION(3,10,0)
+	scale = gdk_window_get_scale_factor (window);
+#endif
+	x *= scale;
+	y *= scale;
 
 	switch (event->type) {
 		case GDK_2BUTTON_PRESS:
@@ -1184,8 +1190,8 @@ gog_graph_view_handle_event (GogGraphView *view, GdkEvent *event,
 				gdk_window_get_device_position (window,
 				                                ((GdkEventMotion *) event)->device,
 				                                &x_int, &y_int, NULL);
-				x = x_int - x_offset;
-				y = y_int - y_offset;
+				x = (x_int - x_offset) * scale;
+				y = (y_int - y_offset) * scale;
 			}
 			if (view->action != NULL) {
 				gog_tool_action_move (view->action, x, y);

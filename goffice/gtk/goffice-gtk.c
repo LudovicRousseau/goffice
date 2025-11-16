@@ -166,7 +166,7 @@ apply_ui_from_file (GtkBuilder *gui, GsfInput *src, const char *uifile,
  * Simple utility to open ui files
  *
  * Since 0.9.6
- * Returns: (transfer full): a new #GtkBuilder or NULL
+ * Returns: (transfer full): a new #GtkBuilder or %NULL
  *
  * @uifile should be one of these:
  *
@@ -268,7 +268,7 @@ go_gtk_builder_load (char const *uifile,
  * Simple utility to open ui files
  *
  * Deprecated: 0.9.6, use go_gtk_builder_load().
- * Returns: (transfer full): a new #GtkBuilder or NULL
+ * Returns: (transfer full): a new #GtkBuilder or %NULL
  *
  * @uifile should be one of these:
  *
@@ -294,7 +294,7 @@ go_gtk_builder_new (char const *uifile,
  * Simple utility to open ui files
  *
  * Since: 0.9.6
- * Returns: (transfer full): a new #GtkBuilder or NULL
+ * Returns: (transfer full): a new #GtkBuilder or %NULL
  *
  * Variant of go_gtk_builder_new that searchs goffice directories
  * for files.
@@ -385,7 +385,7 @@ go_gtk_builder_signal_connect_swapped (GtkBuilder	*gui,
  * Simple wrapper to #gtk_builder_get_object which returns the object
  * as a GtkWidget.
  *
- * Returns: (transfer none): a new #GtkWidget or NULL
+ * Returns: (transfer none): a new #GtkWidget or %NULL
  **/
 GtkWidget *
 go_gtk_builder_get_widget (GtkBuilder *gui, char const *widget_name)
@@ -401,7 +401,7 @@ go_gtk_builder_get_widget (GtkBuilder *gui, char const *widget_name)
  * searches the #GtkComboBox in @gui and ensures it has a model and a
  * renderer appropriate for using with #gtk_combo_box_append_text and friends.
  *
- * Returns: (transfer none): the #GtkComboBox or NULL
+ * Returns: (transfer none): the #GtkComboBox or %NULL
  **/
 GtkComboBox *
 go_gtk_builder_combo_box_init_text (GtkBuilder *gui, char const *widget_name)
@@ -955,6 +955,11 @@ typedef struct {
 	double resolution;
 	gboolean is_expanded;
 	GOImageFormat format;
+
+	// Not saved, but used by handlers
+	gboolean by_ext;
+	GSList *supported_formats;
+	GtkWidget *resolution_widget;
 } SaveInfoState;
 
 static void
@@ -965,14 +970,23 @@ save_info_state_free (SaveInfoState *state)
 }
 
 static void
-cb_format_combo_changed (GtkComboBox *combo, GtkWidget *expander)
+cb_format_combo_changed (GtkComboBox *combo, SaveInfoState *state)
 {
-	GOImageFormatInfo const *format_info;
+	gboolean sensitive;
+	int i;
 
-	format_info = go_image_get_format_info (gtk_combo_box_get_active (combo));
-	gtk_widget_set_sensitive (expander,
-				  format_info != NULL &&
-				  format_info->is_dpi_useful);
+	i = gtk_combo_box_get_active (combo);
+	if (state->by_ext && i == 0)
+		sensitive = TRUE;
+	else {
+		GOImageFormat fmt = GPOINTER_TO_UINT
+			(g_slist_nth_data (state->supported_formats,
+					   i - state->by_ext));
+		GOImageFormatInfo const *format_info =
+			go_image_get_format_info (fmt);
+		sensitive = format_info && format_info->is_dpi_useful;
+	}
+	gtk_widget_set_sensitive (state->resolution_widget, sensitive);
 }
 
 /**
@@ -982,7 +996,7 @@ cb_format_combo_changed (GtkComboBox *combo, GtkWidget *expander)
  * @ret_format: default file format
  * @resolution: export resolution
  *
- * Opens a file chooser and let user choose file URI and format in a list of
+ * Opens a file chooser and lets user choose file URI and format in a list of
  * supported ones.
  *
  * Returns: file URI string, file #GOImageFormat stored in @ret_format, and
@@ -1015,6 +1029,8 @@ go_gui_get_image_save_info (GtkWindow *toplevel, GSList *supported_formats,
 		g_object_set_data_full (G_OBJECT (toplevel), key,
 					state, (GDestroyNotify) save_info_state_free);
 	}
+	state->supported_formats = supported_formats;
+	state->by_ext = FALSE;
 
 	g_object_set (G_OBJECT (fsel), "title", _("Save as"), NULL);
 
@@ -1023,11 +1039,17 @@ go_gui_get_image_save_info (GtkWindow *toplevel, GSList *supported_formats,
 	if (gui != NULL) {
 		GtkWidget *widget;
 
+		state->resolution_widget = resolution_grid = go_gtk_builder_get_widget (gui, "resolution-grid");
+
 		/* Format selection UI */
 		if (supported_formats != NULL && ret_format != NULL) {
 			int i;
 			GSList *l;
 			format_combo = go_gtk_builder_combo_box_init_text (gui, "format_combo");
+
+			state->by_ext = TRUE;
+			go_gtk_combo_box_append_text (format_combo, _("Auto by extension"));
+
 			for (l = supported_formats, i = 0; l != NULL; l = l->next, i++) {
 				format = GPOINTER_TO_UINT (l->data);
 				format_info = go_image_get_format_info (format);
@@ -1059,11 +1081,10 @@ go_gui_get_image_save_info (GtkWindow *toplevel, GSList *supported_formats,
 			gtk_widget_hide (expander);
 
 		if (resolution != NULL && supported_formats != NULL && ret_format != NULL) {
-			resolution_grid = go_gtk_builder_get_widget (gui, "resolution-grid");
-
-			cb_format_combo_changed (format_combo, resolution_grid);
+			cb_format_combo_changed (format_combo, state);
 			g_signal_connect (GTK_WIDGET (format_combo), "changed",
-					  G_CALLBACK (cb_format_combo_changed), resolution_grid);
+					  G_CALLBACK (cb_format_combo_changed),
+					  state);
 		}
 
 		g_object_unref (gui);
@@ -1083,9 +1104,23 @@ go_gui_get_image_save_info (GtkWindow *toplevel, GSList *supported_formats,
 		char *new_uri = NULL;
 		int index = gtk_combo_box_get_active (format_combo);
 
-		if (index >= 0) {
+		format = GO_IMAGE_FORMAT_UNKNOWN;
+		if (index < 0)
+			; // That's it.
+		else if (state->by_ext && index == 0) {
+			GSList *l;
+
+			for (l = supported_formats; l; l = l->next) {
+				GOImageFormat f = GPOINTER_TO_UINT (l->data);
+				GOImageFormatInfo const *format_info = go_image_get_format_info (f);
+				if (go_url_check_extension (uri, format_info->ext, NULL))
+					format = f;
+			}
+			if (format == GO_IMAGE_FORMAT_UNKNOWN)
+				goto loop;
+		} else {
 			format = GPOINTER_TO_UINT (g_slist_nth_data
-				(supported_formats, index));
+				(supported_formats, index - state->by_ext));
 			format_info = go_image_get_format_info (format);
 			if (!go_url_check_extension (uri, format_info->ext, &new_uri) &&
 			    !go_gtk_query_yes_no (GTK_WINDOW (fsel), TRUE,
@@ -1099,8 +1134,7 @@ go_gui_get_image_save_info (GtkWindow *toplevel, GSList *supported_formats,
 			}
 			g_free (uri);
 			uri = new_uri;
-		} else
-			format = GO_IMAGE_FORMAT_UNKNOWN;
+		}
 		*ret_format = format;
 	}
 	if (!go_gtk_url_is_writeable (GTK_WINDOW (fsel), uri, TRUE)) {
@@ -1536,8 +1570,6 @@ go_menu_position_below (GtkMenu  *menu,
 	GtkWidget *widget = GTK_WIDGET (user_data);
 	gint sx, sy;
 	GtkRequisition req;
-	GdkScreen *screen;
-	gint monitor_num;
 	GdkRectangle monitor;
 	GdkWindow *window = gtk_widget_get_window (widget);
 	GtkAllocation size;
@@ -1563,9 +1595,18 @@ go_menu_position_below (GtkMenu  *menu,
 		*x = sx + size.width - req.width;
 	*y = sy;
 
-	screen = gtk_widget_get_screen (widget);
-	monitor_num = gdk_screen_get_monitor_at_window (screen, window);
-	gdk_screen_get_monitor_geometry (screen, monitor_num, &monitor);
+#ifdef HAVE_GDK_DISPLAY_GET_MONITOR_AT_WINDOW
+	gdk_monitor_get_geometry
+		(gdk_display_get_monitor_at_window
+		 (gtk_widget_get_display (widget), window),
+		 &monitor);
+#else
+	{
+		GdkScreen *screen = gtk_widget_get_screen (widget);
+		gint monitor_num = gdk_screen_get_monitor_at_window (screen, window);
+		gdk_screen_get_monitor_geometry (screen, monitor_num, &monitor);
+	}
+#endif
 
 	if (*x < monitor.x)
 		*x = monitor.x;
@@ -1591,7 +1632,7 @@ go_menu_position_below (GtkMenu  *menu,
  *
  * This function is a simple convenience wrapper for #gtk_show_uri.
  *
- * Returns: %NULL on sucess, or a newly allocated #GError if something
+ * Returns: %NULL on success, or a newly allocated #GError if something
  * went wrong.
  **/
 GError *

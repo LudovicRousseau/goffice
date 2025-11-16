@@ -3,7 +3,7 @@
  * go-format.c :
  *
  * Copyright (C) 2003-2005 Jody Goldberg (jody@gnome.org)
- * Copyright (C) 2005-2014 Morten Welinder (terra@gnome.org)
+ * Copyright (C) 2005-2023 Morten Welinder (terra@gnome.org)
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -19,16 +19,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301
  * USA
- */
-
-/*
- * NOTE - NOTE - NOTE
- *
- * This file includes itself in order to provide both "double" and "long
- * double" versions of most functions.
- *
- * Most source lines thus correspond to two functions, gdb is having
- * a hard time sorting things out.  Feel with it.
  */
 
 #include <goffice/goffice-config.h>
@@ -51,11 +41,16 @@
 #include <errno.h>
 #include <stdlib.h>
 
+// We need multiple versions of this code.  We're going to include ourself
+// with different settings of various macros.  gdb will hate us.
+#include <goffice/goffice-multipass.h>
+#ifndef SKIP_THIS_PASS
+
 #undef DEBUG_GENERAL
 
 /**
  * GOFormatFamily:
- * @GO_FORMAT_UNKNOWN: unknown ,should not occur.
+ * @GO_FORMAT_UNKNOWN: unknown, should not occur.
  * @GO_FORMAT_GENERAL: general.
  * @GO_FORMAT_NUMBER: number.
  * @GO_FORMAT_CURRENCY: currency.
@@ -129,64 +124,15 @@
 #define ALLOW_NEGATIVE_TIMES
 #define MAX_DECIMALS 100
 
-/* Define ALLOW_DENOM_REMOVAL to remove /1s. This is not XL compatible.*/
+// Define ALLOW_DENOM_REMOVAL to remove /1s. This is not XL compatible.
 #undef ALLOW_DENOM_REMOVAL
 
-/* Define ALLOW_NO_SIGN_AFTER_E to permit formats such as '00E00' and '00E +00' */
+// Define ALLOW_NO_SIGN_AFTER_E to permit formats such as '00E00' and '00E +00'
 #define ALLOW_NO_SIGN_AFTER_E
 
 #define ALLOW_EE_MARKUP
 #define ALLOW_SI_APPEND
 #define ALLOW_PI_SLASH
-
-/* ------------------------------------------------------------------------- */
-
-#ifndef DOUBLE
-
-#define DEFINE_COMMON
-#define DOUBLE double
-#define SUFFIX(_n) _n
-#define PREFIX(_n) DBL_ ## _n
-#define FORMAT_e "e"
-#define FORMAT_f "f"
-#define FORMAT_E "E"
-#define FORMAT_G "G"
-#define STRTO go_strtod
-
-#ifdef GOFFICE_WITH_LONG_DOUBLE
-/*
- * We need two versions.  Include ourself in order to get regular
- * definition first.
- */
-#include "go-format.c"
-
-/* Now change definitions of macros for the long double version.  */
-#undef DEFINE_COMMON
-#undef DOUBLE
-#undef SUFFIX
-#undef PREFIX
-#undef FORMAT_e
-#undef FORMAT_f
-#undef FORMAT_E
-#undef FORMAT_G
-#undef STRTO
-
-#ifdef HAVE_SUNMATH_H
-#include <sunmath.h>
-#endif
-#define DOUBLE long double
-#define SUFFIX(_n) _n ## l
-#define PREFIX(_n) LDBL_ ## _n
-#define FORMAT_e "Le"
-#define FORMAT_f "Lf"
-#define FORMAT_E "LE"
-#define FORMAT_G "LG"
-#define STRTO go_strtold
-#endif
-
-#endif
-
-/* ------------------------------------------------------------------------- */
 
 #undef DEBUG_PROGRAMS
 #undef DEBUG_REF_COUNT
@@ -500,6 +446,9 @@ typedef struct {
 static int go_format_roundtrip_digits;
 #ifdef GOFFICE_WITH_LONG_DOUBLE
 static int go_format_roundtrip_digitsl;
+#endif
+#ifdef GOFFICE_WITH_DECIMAL64
+static const int go_format_roundtrip_digitsD = 16;
 #endif
 #endif
 
@@ -863,7 +812,7 @@ go_format_palette_index_from_color (GOColor c)
  *
  * Return: TRUE, if ok.  Then @color will be filled in, and @n will be
  * 	a number 0-7 for standard colors.
- *	Returns FALSE otherwise and @color will be zeroed.
+ *	Returns %FALSE otherwise and @color will be zeroed.
  **/
 static gboolean
 go_format_parse_color (char const *str, GOColor *color,
@@ -2857,9 +2806,9 @@ fill_with_char (GString *str, PangoLayout *layout, gsize fill_pos,
 
 	gap = n * fill_utf8_len;
 	g_string_set_size (str, str->len + gap);
-	g_memmove (str->str + fill_pos + gap,
-		   str->str + fill_pos,
-		   str->len - (fill_pos + gap));
+	memmove (str->str + fill_pos + gap,
+		 str->str + fill_pos,
+		 str->len - (fill_pos + gap));
 	while (n > 0) {
 		memcpy (str->str + fill_pos, fill_utf8, fill_utf8_len);
 		fill_pos += fill_utf8_len;
@@ -3796,7 +3745,7 @@ SUFFIX(go_format_execute) (PangoLayout *layout, GString *dst,
 	GDateWeekday weekday = 0;
 	DOUBLE hour = 0, minute = 0, second = 0;
 	gboolean ispm = FALSE;
-	char fsecond[PREFIX(DIG) + 10];
+	char fsecond[DOUBLE_DIG + 10];
 	const char *date_dec_ptr = NULL;
 	GString *numtxt = NULL;
 	size_t dotpos = 0;
@@ -3946,7 +3895,7 @@ SUFFIX(go_format_execute) (PangoLayout *layout, GString *dst,
 			gboolean isneg = FALSE;
 #endif
 
-			valsecs = SUFFIX(floor)(SUFFIX(go_add_epsilon)(SUFFIX(fabs)(val)) * (unit * 86400) + 0.5);
+			valsecs = SUFFIX(round)(SUFFIX(go_add_epsilon)(SUFFIX(fabs)(val)) * (unit * 86400));
 			if (date_decimals) {
 				DOUBLE vs = (seen_elapsed || !isneg) ? valsecs : 0 - valsecs;
 				DOUBLE f = SUFFIX(fmod) (vs, unit);
@@ -4515,26 +4464,47 @@ SUFFIX(go_format_execute) (PangoLayout *layout, GString *dst,
 		case OP_NUM_FRACTION: {
 			gboolean wp = *prg++;
 			gboolean explicit_denom = *prg++;
-			DOUBLE aval = SUFFIX(go_add_epsilon) (SUFFIX(fabs)(val));
+			DOUBLE aval = SUFFIX(fabs)(val);
+			DOUBLE aval0 = aval;
+			DOUBLE delta;
+
+			// Parse the program argument here, not after "retry:"
+			if (explicit_denom) {
+				double plaind = 1; /* Plain double */
+				memcpy (&plaind, prg, sizeof (plaind));
+				prg += sizeof (plaind);
+				fraction.d = plaind;
+				fraction.digits = cnt_digits (fraction.d);
+			} else {
+				fraction.digits = *prg++;
+			}
 
 			fraction.val = val;
+
+			if (aval != SUFFIX(floor)(aval))
+				aval = SUFFIX(go_add_epsilon) (aval);
+
+			retry:
+			delta = aval - aval0;
 			fraction.w = SUFFIX(floor) (aval);
 			aval -= fraction.w;
 
 			if (explicit_denom) {
-				double plaind; /* Plain double */
-				memcpy (&plaind, prg, sizeof (plaind));
-				prg += sizeof (plaind);
-
-				fraction.d = plaind;
-				fraction.digits = cnt_digits (fraction.d);
-				fraction.n = SUFFIX(floor) (0.5 + aval * fraction.d);
+				fraction.n = SUFFIX(round) (aval * fraction.d);
 			} else {
 				int ni, di;
-				fraction.digits = *prg++;
-				go_continued_fraction (aval, SUFFIX(go_pow10) (fraction.digits) - 1, &ni, &di);
+				DOUBLE p10 = SUFFIX(go_pow10) (fraction.digits);
+				int max_denom = MIN (INT_MAX, p10 - 1);
+
+				go_continued_fraction (aval, max_denom, &ni, &di);
 				fraction.n = ni;
 				fraction.d = di;
+			}
+
+			if (delta >= 1 / fraction.d) {
+				// Don't allow the add-epsilon to exceed 1/d
+				aval = aval0;
+				goto retry;
 			}
 
 			if (wp && fraction.n == fraction.d) {
@@ -4550,7 +4520,7 @@ SUFFIX(go_format_execute) (PangoLayout *layout, GString *dst,
 #ifdef ALLOW_PI_SLASH
 		case OP_NUM_FRACTION_SCALE_PI:
 			/* FIXME: not long-double safe.  */
-			val /= G_PI;
+			val /= DOUBLE_PI;
 			break;
 #endif
 
@@ -4806,6 +4776,12 @@ go_format_measure_strlen (const GString *str,
 			convert_sign (str, (i), num_shape, shape_flags); \
 	} while (0)
 
+#define HANDLE_ESIGN(i) do {			\
+	const char *e = strchr (str->str, 'E');	\
+	if (e)					\
+		HANDLE_SIGN (e - str->str + 1);	\
+} while (0)
+
 
 #define HANDLE_NUMERAL_SHAPE		                                \
 	do {								\
@@ -4896,24 +4872,7 @@ SUFFIX(ilog10) (DOUBLE x)
  * @layout: Optional #PangoLayout, probably preseeded with font attribute.
  * @str: a GString to store (not append!) the resulting string in.
  * @measure: (scope call): Function to measure width of string/layout.
- * @metrics: Font metrics corresponding to @mesaure.
- * @val: floating-point value.  Must be finite.
- * @col_width: intended max width of layout in the units that @measure uses.
- * A width of -1 means no restriction.
- * @unicode_minus: Use unicode minuses, not hyphens.
- * @numeral_shape: numeral shape identifier.
- * @custom_shape_flags: flags for using @numeral_shape.
- *
- * Render a floating-point value into @layout in such a way that the
- * layouting width does not needlessly exceed @col_width.  Optionally
- * use unicode minus instead of hyphen.
- **/
-/**
- * go_render_generall:
- * @layout: Optional #PangoLayout, probably preseeded with font attribute.
- * @str: a GString to store (not append!) the resulting string in.
- * @measure: (scope call): Function to measure width of string/layout.
- * @metrics: Font metrics corresponding to @mesaure.
+ * @metrics: Font metrics corresponding to @measure.
  * @val: floating-point value.  Must be finite.
  * @col_width: intended max width of layout in the units that @measure uses.
  * A width of -1 means no restriction.
@@ -4958,7 +4917,7 @@ SUFFIX(go_render_general) (PangoLayout *layout, GString *str,
 	} else {
 		int w;
 
-		w = (col_width - (val <= -0.5 ? sign_width : 0)) / min_digit_width;
+		w = (col_width - (val <= CONST(-0.5) ? sign_width : 0)) / min_digit_width;
 		if (w <= maxdigits) {
 			/* We're limited by width.  */
 			maxdigits = w;
@@ -4975,6 +4934,7 @@ SUFFIX(go_render_general) (PangoLayout *layout, GString *str,
 		go_dtoa (str, "=!^" FORMAT_G, val);
 		HANDLE_NUMERAL_SHAPE;
 		HANDLE_SIGN (0);
+		HANDLE_ESIGN ();
 		SETUP_LAYOUT;
 		if (col_width == -1 || measure (str, layout) <= col_width)
 			return;
@@ -4988,11 +4948,11 @@ SUFFIX(go_render_general) (PangoLayout *layout, GString *str,
 		goto zero;
 
 	aval = SUFFIX(fabs) (val);
-	if (aval >= SUFFIX(1e15) || aval < SUFFIX(1e-4))
+	if (aval >= CONST(1e15) || aval < CONST(1e-4))
 		goto e_notation;
 
 	/* Number of digits in round(aval).  */
-	digs_as_int = (aval >= 9.5 ? 1 + SUFFIX(ilog10) (aval + 0.5) : 1);
+	digs_as_int = (aval >= (DOUBLE)9.5 ? 1 + SUFFIX(ilog10) (aval + CONST(0.5)) : 1);
 
 	/* Check if there is room for the whole part, including sign.  */
 	safety = metrics->avg_digit_width / 2;
@@ -5093,7 +5053,7 @@ SUFFIX(go_render_general) (PangoLayout *layout, GString *str,
 #ifdef DEBUG_GENERAL
 	g_printerr ("Trying E-notation\n");
 #endif
-	rounds_to_0 = (aval < 0.5);
+	rounds_to_0 = (aval < CONST(0.5));
 	prec = (col_width -
 		(val >= 0 ? 0 : sign_width) -
 		(aval < 1 ? sign_width : metrics->plus_width) -
@@ -5112,8 +5072,7 @@ SUFFIX(go_render_general) (PangoLayout *layout, GString *str,
 			go_dtoa (str, "=^.0" FORMAT_E, val);
 			HANDLE_NUMERAL_SHAPE;
 			HANDLE_SIGN (0);
-			epos = strchr (str->str, 'E') - str->str;
-			HANDLE_SIGN (epos + 1);
+			HANDLE_ESIGN ();
 			SETUP_LAYOUT;
 			if (!rounds_to_0)
 				return;
@@ -5125,7 +5084,7 @@ SUFFIX(go_render_general) (PangoLayout *layout, GString *str,
 
 		goto zero;
 	}
-	prec = MIN (prec, PREFIX(DIG) - 1);
+	prec = MIN (prec, DOUBLE_DIG - 1);
 	go_dtoa (str, "=^.*" FORMAT_E, prec, val);
 	epos = strchr (str->str, 'E') - str->str;
 	digs = 0;
@@ -5185,33 +5144,12 @@ SUFFIX(go_render_general) (PangoLayout *layout, GString *str,
  * @layout: Optional PangoLayout, probably preseeded with font attribute.
  * @str: a GString to store (not append!) the resulting string in.
  * @measure: (scope call): Function to measure width of string/layout.
- * @metrics: Font metrics corresponding to @mesaure.
+ * @metrics: Font metrics corresponding to @measure.
  * @fmt: #GOFormat
  * @val: floating-point value.  Must be finite.
  * @type: a format character
  * @sval: a string to append to @str after @val
- * @go_color: a color to rende
- * @col_width: intended max width of layout in pango units.  -1 means
- *             no restriction.
- * @date_conv: #GODateConventions
- * @unicode_minus: Use unicode minuses, not hyphens.
- *
- * Render a floating-point value into @layout in such a way that the
- * layouting width does not needlessly exceed @col_width.  Optionally
- * use unicode minus instead of hyphen.
- * Returns: a #GOFormatNumberError
- **/
-/**
- * go_format_value_gstringl:
- * @layout: Optional PangoLayout, probably preseeded with font attribute.
- * @str: a GString to store (not append!) the resulting string in.
- * @measure: (scope call): Function to measure width of string/layout.
- * @metrics: Font metrics corresponding to @mesaure.
- * @fmt: #GOFormat
- * @val: floating-point value.  Must be finite.
- * @type: a format character
- * @sval: a string to append to @str after @val
- * @go_color: a color to rende
+ * @go_color: a color to render
  * @col_width: intended max width of layout in pango units.  -1 means
  *             no restriction.
  * @date_conv: #GODateConventions
@@ -5363,9 +5301,8 @@ SUFFIX(go_format_value_gstring) (PangoLayout *layout, GString *str,
  *
  * Converts @val into a string using format specified by @fmt.
  *
- * returns: a newly allocated string containing formated value.
+ * Returns: (transfer full): formatted value.
  **/
-
 char *
 SUFFIX(go_format_value) (GOFormat const *fmt, DOUBLE val)
 {
@@ -5469,7 +5406,8 @@ _go_number_format_shutdown (void)
  * Localizes the given format string, i.e., changes decimal dots to the
  * locale's notion of that and performs other such transformations.
  *
- * Returns: a localized format string, or NULL if the format was not valid.
+ * Returns: (transfer full) (nullable): a localized format string, or
+ * %NULL if the format was not valid.
  **/
 char *
 go_format_str_localize (char const *str)
@@ -5585,7 +5523,8 @@ go_format_str_localize (char const *str)
  * De-localizes the given format string, i.e., changes locale's decimal
  * separators to dots and performs other such transformations.
  *
- * Returns: a non-local format string, or NULL if the format was not valid.
+ * Returns: (transfer full) (nullable): a non-local format string, or
+ * %NULL if the format was not valid.
  **/
 char *
 go_format_str_delocalize (char const *str)
@@ -5736,12 +5675,13 @@ make_frobbed_format (char *str, const GOFormat *fmt)
 }
 
 /**
- * go_format_inc_precision :
+ * go_format_inc_precision:
  * @fmt: #GOFormat
  *
  * Increases the displayed precision for @fmt by one digit.
  *
- * Returns: NULL if the new format would not change things
+ * Returns: (transfer full) (nullable): New format, or %NULL if the format
+ * would not change.
  **/
 GOFormat *
 go_format_inc_precision (GOFormat const *fmt)
@@ -5844,12 +5784,13 @@ go_format_inc_precision (GOFormat const *fmt)
 }
 
 /**
- * go_format_dec_precision :
+ * go_format_dec_precision:
  * @fmt: #GOFormat
  *
  * Decreases the displayed precision for @fmt by one digit.
  *
- * Returns: NULL if the new format would not change things
+ * Returns: (transfer full) (nullable): New format, or %NULL if the format
+ * would not change.
  **/
 GOFormat *
 go_format_dec_precision (GOFormat const *fmt)
@@ -6195,11 +6136,10 @@ go_format_parse_markup (char *str)
 
 #ifdef DEFINE_COMMON
 /**
- * go_format_new_from_XL :
+ * go_format_new_from_XL:
  * @str: XL descriptor in UTF-8 encoding.
  *
- * Returns: Looks up and potentially creates a GOFormat from the supplied
- * 	string in XL format.
+ * Returns: (transfer full): A GOFormat matching @str.
  **/
 GOFormat *
 go_format_new_from_XL (char const *str)
@@ -6242,14 +6182,14 @@ go_format_new_from_XL (char const *str)
 
 #ifdef DEFINE_COMMON
 /**
- * go_format_new_markup :
+ * go_format_new_markup:
  * @markup: #PangoAttrList
  * @add_ref: boolean
  *
- * If @add_ref is FALSE absorb the reference to @markup, otherwise add a
+ * If @add_ref is %FALSE absorb the reference to @markup, otherwise add a
  * reference.
  *
- * Returns: A new format.
+ * Returns: (transfer full): A new format.
  **/
 GOFormat *
 go_format_new_markup (PangoAttrList *markup, gboolean add_ref)
@@ -6275,7 +6215,7 @@ go_format_new_markup (PangoAttrList *markup, gboolean add_ref)
  * go_format_as_XL:
  * @fmt: a #GOFormat
  *
- * Returns: the XL style format strint.
+ * Returns: (transfer none): the XL style format strint.
  */
 const char *
 go_format_as_XL (GOFormat const *fmt)
@@ -6300,7 +6240,7 @@ go_format_eq (GOFormat const *a, GOFormat const *b)
 
 #ifdef DEFINE_COMMON
 /**
- * go_format_ref :
+ * go_format_ref:
  * @fmt: a #GOFormat
  *
  * Adds a reference to a GOFormat.
@@ -6328,7 +6268,7 @@ go_format_ref (GOFormat const *gf_)
 
 #ifdef DEFINE_COMMON
 /**
- * go_format_unref :
+ * go_format_unref:
  * @fmt: (transfer full) (nullable): a #GOFormat
  *
  * Removes a reference to @fmt, freeing when it goes to zero.
@@ -6407,7 +6347,7 @@ go_format_get_type (void)
  * go_format_is_invalid:
  * @fmt: Format to query
  *
- * Returns: TRUE if, and if only, the format is invalid
+ * Returns: %TRUE if, and if only, the format is invalid
  **/
 gboolean
 go_format_is_invalid (GOFormat const *fmt)
@@ -6572,8 +6512,8 @@ go_format_month_before_day (GOFormat const *fmt)
  * go_format_has_year:
  * @fmt: Format to query
  *
- * Returns: TRUE if format is a number format with a year specifier
- * 	    FALSE otherwise.
+ * Returns: %TRUE if format is a number format with a year specifier
+ * 	    %FALSE otherwise.
  **/
 gboolean
 go_format_has_year (GOFormat const *fmt)
@@ -6590,8 +6530,8 @@ go_format_has_year (GOFormat const *fmt)
  * go_format_has_month:
  * @fmt: Format to query
  *
- * Returns: TRUE if format is a number format with a year specifier
- * 	    FALSE otherwise.
+ * Returns: %TRUE if format is a number format with a year specifier
+ * 	    %FALSE otherwise.
  **/
 gboolean
 go_format_has_month (GOFormat const *fmt)
@@ -6608,8 +6548,8 @@ go_format_has_month (GOFormat const *fmt)
  * go_format_has_day:
  * @fmt: Format to query
  *
- * Returns: TRUE if format is a number format with a day-of-month specifier
- * 	    FALSE otherwise.
+ * Returns: %TRUE if format is a number format with a day-of-month specifier
+ * 	    %FALSE otherwise.
  **/
 gboolean
 go_format_has_day (GOFormat const *fmt)
@@ -6626,8 +6566,8 @@ go_format_has_day (GOFormat const *fmt)
  * go_format_has_hour:
  * @fmt: Format to query
  *
- * Returns: TRUE if format is a number format with an hour specifier
- * 	    FALSE otherwise.
+ * Returns: %TRUE if format is a number format with an hour specifier
+ * 	    %FALSE otherwise.
  **/
 gboolean
 go_format_has_hour (GOFormat const *fmt)
@@ -6646,8 +6586,8 @@ go_format_has_hour (GOFormat const *fmt)
  * go_format_has_minute:
  * @fmt: Format to query
  *
- * Returns: TRUE if format is a number format with a minute specifier
- * 	    FALSE otherwise.
+ * Returns: %TRUE if format is a number format with a minute specifier
+ * 	    %FALSE otherwise.
  **/
 gboolean
 go_format_has_minute (GOFormat const *fmt)
@@ -6743,18 +6683,6 @@ go_format_new_magic (GOFormatMagic m)
  * Returns: (transfer none): @fmt format, presumably a conditional format,
  * specialized to @value of @type.
  */
-
-/**
- * go_format_specializel:
- * @fmt: the format to specialize
- * @val: the value to use
- * @type: the type of value; 'F' for numeric, 'B' for boolean, 'S' for string.
- * @inhibit_minus: (out): set to %TRUE if the format dictates that a minus
- * should be inhibited when rendering negative values.
- *
- * Returns: (transfer none): @fmt format, presumably a conditional format,
- * specialized to @value of @type.
- */
 const GOFormat *
 SUFFIX(go_format_specialize) (GOFormat const *fmt, DOUBLE val, char type,
 			      gboolean *inhibit_minus)
@@ -6795,22 +6723,22 @@ SUFFIX(go_format_specialize) (GOFormat const *fmt, DOUBLE val, char type,
 
 		switch (c->op) {
 		case GO_FMT_COND_EQ:
-			cond = (is_number && val == c->val);
+			cond = (is_number && val == (DOUBLE)c->val);
 			break;
 		case GO_FMT_COND_NE:
-			cond = (is_number && val != c->val);
+			cond = (is_number && val != (DOUBLE)c->val);
 			break;
 		case GO_FMT_COND_LT:
-			cond = (is_number && val <  c->val);
+			cond = (is_number && val <  (DOUBLE)c->val);
 			break;
 		case GO_FMT_COND_LE:
-			cond = (is_number && val <= c->val);
+			cond = (is_number && val <= (DOUBLE)c->val);
 			break;
 		case GO_FMT_COND_GT:
-			cond = (is_number && val >  c->val);
+			cond = (is_number && val >  (DOUBLE)c->val);
 			break;
 		case GO_FMT_COND_GE:
-			cond = (is_number && val >= c->val);
+			cond = (is_number && val >= (DOUBLE)c->val);
 			break;
 		case GO_FMT_COND_TEXT:
 			cond = (type == 'S' || type == 'B');
@@ -9131,6 +9059,7 @@ go_format_output_simple_to_odf (GsfXMLOut *xout, gboolean with_extension,
 			gsf_xml_out_add_cstr (xout, STYLE "name", name);
 			gsf_xml_out_start_element (xout, NUMBER "text");
 			gsf_xml_out_add_cstr (xout, NULL, fstr);
+			gsf_xml_out_end_element (xout);
 		}
 		result = FALSE;
 		break;
@@ -9279,4 +9208,12 @@ go_format_output_to_odf (GsfXMLOut *xout, GOFormat const *fmt,
 
 	return result;
 }
+#endif
+
+/* ------------------------------------------------------------------------- */
+
+// See comments at top
+#endif // SKIP_THIS_PASS
+#if INCLUDE_PASS < INCLUDE_PASS_LAST
+#include __FILE__
 #endif

@@ -25,7 +25,6 @@
 #include <gsf/gsf-utils.h>
 #include <gsf/gsf-impl-utils.h>
 #include <glib/gi18n-lib.h>
-#include <librsvg/rsvg.h>
 
 /**
  * GOImageFormat:
@@ -76,9 +75,8 @@ static void go_image_build_pixbuf_format_infos (void);
  * go_mime_to_image_format:
  * @mime_type: a mime type string
  *
- * returns: file extension for the given mime type.
+ * Returns: (transfer full): file extension for the given mime type.
  **/
-
 char *
 go_mime_to_image_format (char const *mime_type)
 {
@@ -89,8 +87,8 @@ go_mime_to_image_format (char const *mime_type)
 		"image/svg-xml", "svg",
 		"image/vnd.adobe.svg+xml", "svg",
 		"text/xml-svg", "svg",
-		"image/x-wmf", "wmf",
-		"image/x-emf", "emf",
+		"image/wmf", "wmf",
+		"image/emf", "emf",
 		"application/pdf", "pdf",
 		"application/postscript", "ps",
 		"image/x-eps", "eps",
@@ -109,9 +107,8 @@ go_mime_to_image_format (char const *mime_type)
  * go_image_format_to_mime:
  * @format: a file extension string
  *
- * returns: corresponding mime type.
+ * Returns: (transfer full) (nullable): corresponding mime type.
  **/
-
 char *
 go_image_format_to_mime (char const *format)
 {
@@ -256,9 +253,8 @@ go_image_build_pixbuf_format_infos (void)
  *
  * Retrieves information associated to @format.
  *
- * Returns: a #GOImageFormatInfo struct.
+ * Returns: (transfer none): a #GOImageFormatInfo struct.
  **/
-
 GOImageFormatInfo const *
 go_image_get_format_info (GOImageFormat format)
 {
@@ -281,7 +277,6 @@ go_image_get_format_info (GOImageFormat format)
  *
  * returns: corresponding #GOImageFormat.
  **/
-
 GOImageFormat
 go_image_get_format_from_name (char const *name)
 {
@@ -312,7 +307,6 @@ go_image_get_format_from_name (char const *name)
  * Returns: (element-type GOImageFormat) (transfer container): a list of #GOImageFormat that can be created
  * from a pixbuf.
  **/
-
 GSList *
 go_image_get_formats_with_pixbuf_saver (void)
 {
@@ -616,7 +610,10 @@ go_image_new_from_file (char const *filename, GError **error)
 	g_free (name);
 	switch (format) {
 	case GO_IMAGE_FORMAT_SVG:
+#ifdef GOFFICE_WITH_LIBRSVG
 		return go_svg_new_from_file (filename, error);
+#endif /* GOFFICE_WITH_LIBRSVG */
+		break;
 	case GO_IMAGE_FORMAT_EMF:
 	case GO_IMAGE_FORMAT_WMF:
 		return go_emf_new_from_file (filename, error);
@@ -656,12 +653,12 @@ go_image_new_from_data (char const *type, guint8 const *data, gsize length, char
 	if (data == NULL || length == 0) {
 		image = NULL;
 		type = "unknown";
+#ifdef GOFFICE_WITH_LIBRSVG
 	} else if (!strcmp (type, "svg")) {
 		image = go_svg_new_from_data (data, length, error);
+#endif /* GOFFICE_WITH_LIBRSVG */
 	} else if (!strcmp (type, "emf") || !strcmp (type, "wmf")) {
-#warning Remove this when we have a widgetless canvas, see bug #748493
-		if (gdk_screen_get_default () != NULL)
-			image = go_emf_new_from_data (data, length, error);
+		image = go_emf_new_from_data (data, length, error);
 	} else if (!strcmp (type, "eps")) {
 		image = go_spectre_new_from_data (data, length, error);
 	} else {
@@ -710,15 +707,13 @@ GType
 go_image_type_for_format (char const *format)
 {
 	g_return_val_if_fail (format && *format, 0);
+#ifdef GOFFICE_WITH_LIBRSVG
 	if (!strcmp (format, "svg"))
 		return GO_TYPE_SVG;
-	if (!strcmp (format, "emf") || !strcmp (format, "wmf")) {
-#warning Remove this when we have a widgetless canvas, see bug #748493
-		if (gdk_screen_get_default() == NULL)
-			return 0;
+#endif /* GOFFICE_WITH_LIBRSVG */
+	if (!strcmp (format, "emf") || !strcmp (format, "wmf"))
 		return GO_TYPE_EMF;
-	}
-	 if (!strcmp (format, "eps"))
+	if (!strcmp (format, "eps"))
 		return GO_TYPE_SPECTRE;
 	if (go_image_get_format_from_name (format) != GO_IMAGE_FORMAT_UNKNOWN)
 		return GO_TYPE_PIXBUF;
@@ -850,8 +845,10 @@ go_image_get_info (GOImage *image)
 	/* Dubious */
 	if (GO_IS_EMF (image))
 		return go_image_get_format_info (GO_IMAGE_FORMAT_EMF);
+#ifdef GOFFICE_WITH_LIBRSVG
 	if (GO_IS_SVG (image))
 		return go_image_get_format_info (GO_IMAGE_FORMAT_SVG);
+#endif /* GOFFICE_WITH_LIBRSVG */
 	if (GO_IS_SPECTRE (image))
 		return go_image_get_format_info (GO_IMAGE_FORMAT_EPS);
 	return NULL;

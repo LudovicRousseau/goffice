@@ -98,6 +98,10 @@ go_action_combo_text_create_tool_item (GtkAction *act)
 	GtkEntry *entry;
 	GSList *ptr;
 	int w = -1;
+	GtkStyleContext *context;
+
+	context = gtk_widget_get_style_context (GTK_WIDGET (tool));
+        gtk_style_context_add_class (context, "text");
 
 	if (taction->largest_elem != NULL)
 		w = g_utf8_strlen (taction->largest_elem, -1);
@@ -142,7 +146,7 @@ go_action_combo_text_create_menu_item (GtkAction *act)
 {
 	GOActionComboText *taction = GO_ACTION_COMBO_TEXT (act);
 	GtkWidget *menu = gtk_menu_new ();
-	GtkWidget *item = gtk_image_menu_item_new ();
+	GtkWidget *item = gtk_menu_item_new ();
 	GSList *ptr;
 
 	for (ptr = taction->elements; ptr != NULL ; ptr = ptr->next) {
@@ -252,7 +256,7 @@ go_action_combo_text_get_entry (GOActionComboText const *a)
 }
 
 /**
- * go_action_combo_text_set_entry :
+ * go_action_combo_text_set_entry:
  * @taction: @GOActionComboText
  * @text: the new text
  * @dir: #GOActionComboTextSearchDir

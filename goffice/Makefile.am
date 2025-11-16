@@ -19,8 +19,10 @@ INTROSPECTION_COMPILER_ARGS = \
 #app directory files
 
 noinst_HEADERS = \
-	app/file-priv.h \
-	goffice-debug.h
+	app/file-priv.h				\
+	math/go-ryu.h				\
+	goffice-debug.h				\
+	goffice-multipass.h
 
 app_SOURCES =					\
 	app/go-doc.c				\
@@ -156,7 +158,7 @@ go_data_HEADERS =				\
 	data/goffice-data.h			\
 	data/go-data.h				\
 	data/go-data-impl.h			\
-	data/go-data-simple.h 
+	data/go-data-simple.h
 
 #####################################
 # graph directory files
@@ -352,6 +354,7 @@ math_SOURCES =					\
 	math/go-matrix3x3.c			\
 	math/go-quad.c				\
 	math/go-R.c				\
+	math/go-ryu.c				\
 	math/go-distribution.c
 
 mathdir = $(goffice_include_dir)/math
@@ -371,6 +374,11 @@ math_HEADERS =					\
 	math/go-R.h				\
 	math/go-distribution.h
 
+if GOFFICE_WITH_DECIMAL64
+math_SOURCES += math/go-decimal.c
+math_HEADERS += math/go-decimal.h
+endif
+
 #####################################
 # utils directory files
 utils_SOURCES =					\
@@ -385,7 +393,6 @@ utils_SOURCES =					\
 	utils/go-gradient.c			\
 	utils/go-image.c			\
 	utils/go-pixbuf.c			\
-	utils/go-svg.c				\
 	utils/go-emf.c				\
 	utils/go-spectre.c			\
 	utils/go-line.c				\
@@ -413,6 +420,10 @@ utils_SOURCES =					\
 	utils/go-editor.c			\
 	utils/go-style.c			\
 	utils/go-styled-object.c
+
+if WITH_LIBRSVG
+utils_SOURCES += utils/go-svg.c
+endif
 
 utilsdir = $(goffice_include_dir)/utils
 utils_HEADERS =					\
@@ -488,6 +499,7 @@ CLEANFILES = $(BUILT_SOURCES)		\
 
 libgoffice_@GOFFICE_API_VER@_la_SOURCES = 	\
 	goffice.c		\
+	outoflinedocs.c		\
 	goffice-priv.h \
 	$(app_SOURCES) \
 	$(canvas_SOURCES) \
@@ -569,7 +581,16 @@ LIB_PUBLIC_HDRS = $(libgoffice_@GOFFICE_API_VER@_la_HEADERS)
 
 
 goffice.def: $(ALL_HDRS) $(top_srcdir)/tools/dumpdef.pl
-	cat $(top_builddir)/goffice/goffice-config.h $(ALL_HDRS) | \
+	hdrs='$(ALL_HDRS)'; \
+	hdrs_list=''; \
+	for hdr in $$hdrs; do \
+	  if test -f $(srcdir)/$$hdr; then \
+	    hdrs_list="$$hdrs_list $(srcdir)/$$hdr"; \
+	  else \
+	    hdrs_list="$$hdrs_list $$hdr"; \
+	  fi; \
+	done; \
+	cat $(top_builddir)/goffice/goffice-config.h $$hdrs_list | \
 	sed -e 's/^#[ 	]*include[ 	]\+.*$$//g' | \
 	$(CPP) $(AM_CPPFLAGS) "-DGO_VAR_DECL=__declspec(dllexport)" -P - > xgen-localdef.1
 	@PERL@ $(top_srcdir)/tools/dumpdef.pl \

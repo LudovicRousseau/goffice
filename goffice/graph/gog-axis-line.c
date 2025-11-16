@@ -1,3 +1,4 @@
+
 /*
  * gog-axis-line.c :
  *
@@ -416,10 +417,16 @@ gog_axis_base_get_clamped_position (GogAxisBase *axis_base)
 			return GOG_AXIS_AUTO;
 		cross_location = gog_axis_base_get_cross_location (axis_base);
 		if (gog_axis_get_bounds (cross_axis, &minimum, &maximum)) {
+			double start, end;
+			gog_axis_get_effective_span (cross_axis, &start, &end);
 			if (go_sub_epsilon (cross_location - minimum) <= 0.0)
 				axis_pos = gog_axis_is_inverted (cross_axis) ? GOG_AXIS_AT_HIGH : GOG_AXIS_AT_LOW;
 			else if (go_add_epsilon (cross_location - maximum) >= 0.0)
 				axis_pos = gog_axis_is_inverted (cross_axis) ? GOG_AXIS_AT_LOW : GOG_AXIS_AT_HIGH;
+			if (axis_pos == GOG_AXIS_AT_LOW && start > 0.)
+				return GOG_AXIS_CROSS;
+			if (axis_pos == GOG_AXIS_AT_HIGH && end < 1.)
+				return GOG_AXIS_CROSS;
 		}
 	}
 
@@ -2507,9 +2514,8 @@ axis_line_format_value (GogAxisLine *line, double val, GOString **str)
 }
 
 static void
-gog_axis_line_update_ticks (GogAxisLine *line)
+gog_axis_line_discard_ticks (GogAxisLine *line)
 {
-	GODataVector *pos, *labels;
 	if (line->ticks != NULL) {
 		unsigned i;
 		for (i = 0; i < line->tick_nbr; i++)
@@ -2518,6 +2524,15 @@ gog_axis_line_update_ticks (GogAxisLine *line)
 		g_free (line->ticks);
 	}
 	line->ticks = NULL;
+	line->tick_nbr = 0;
+}
+
+static void
+gog_axis_line_update_ticks (GogAxisLine *line)
+{
+	GODataVector *pos, *labels;
+
+	gog_axis_line_discard_ticks (line);
 	pos = GO_DATA_VECTOR (line->custom_ticks[0].data);
 	labels = GO_DATA_VECTOR (line->custom_ticks[1].data);
 	if (pos != NULL && go_data_has_value (GO_DATA (pos)) && go_data_is_varying_uniformly (GO_DATA (pos))) {
@@ -2526,6 +2541,18 @@ gog_axis_line_update_ticks (GogAxisLine *line)
 		char *lbl;
 		line->ticks = g_new0 (GogAxisTick, len);
 		labels_nb = (labels)? go_data_vector_get_len (labels): 0;
+		if (labels_nb) {
+			// Hack.
+			// Gnumeric's gnm_go_data_vector_load_values changes
+			// the length when the value is first accessed.
+			// That seems like a breach on an (unwritten)
+			// contract, but I am worried about the consequences
+			// of taking that out.  Querying the first value
+			// here is harmless, so for now we go with that.
+			// See Gnumeric #774.
+			(void)go_data_vector_get_value (labels, 0);
+			labels_nb = go_data_vector_get_len (labels);
+		}
 		for (cur = i = 0; i < len; i++) {
 			val = go_data_vector_get_value (pos, i);
 			if (!go_finite (val))
@@ -2662,13 +2689,7 @@ gog_axis_line_finalize (GObject *obj)
 {
 	GogAxisLine *line = GOG_AXIS_LINE (obj);
 
-	if (line->ticks != NULL) {
-		unsigned i;
-		for (i = 0; i < line->tick_nbr; i++)
-			go_string_unref (line->ticks[i].str);
-
-		g_free (line->ticks);
-	}
+	gog_axis_line_discard_ticks (line);
 	go_format_unref (line->assigned_format);
 	go_format_unref (line->format);
 

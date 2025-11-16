@@ -182,9 +182,10 @@ graph_typeselect_minor (GraphGuruTypeSelector *typesel, GocItem *item)
 
 	/* That that modules have been loaded we can get the pixbufs.  */
 	if (!g_object_get_data (G_OBJECT (item->parent), PIXBUFS_LOADED_KEY)) {
-		GList *p;
-		for (p = item->parent->children; p; p = p->next) {
-			GocItem *i = p->data;
+		GPtrArray *children = goc_group_get_children (item->parent);
+		unsigned ui;
+		for (ui = 0; ui < children->len; ui++) {
+			GocItem *i = g_ptr_array_index (children, ui);
 			GogPlotType *t = i
 				? g_object_get_data (G_OBJECT (i), PLOT_TYPE_KEY)
 				: NULL;
@@ -205,6 +206,7 @@ graph_typeselect_minor (GraphGuruTypeSelector *typesel, GocItem *item)
 					      NULL);
 			}
 		}
+		g_ptr_array_unref (children);
 		g_object_set_data (G_OBJECT (item->parent),
 				   PIXBUFS_LOADED_KEY,
 				   GINT_TO_POINTER (1));
@@ -829,24 +831,21 @@ cb_canvas_select_item (GocCanvas *canvas, GdkEvent *event,
 {
 	double item_x, item_y;
 
+	g_return_val_if_fail (GOC_IS_CANVAS (canvas), FALSE);
+
 	switch (event->type) {
-		case GDK_BUTTON_PRESS:
-		case GDK_2BUTTON_PRESS:
-		case GDK_MOTION_NOTIFY:
-		case GDK_BUTTON_RELEASE:
-
-			g_return_val_if_fail (GOC_IS_CANVAS (canvas), FALSE);
-
-			g_object_get (G_OBJECT(s->sample_graph_item), "x", &item_x, "y", &item_y, NULL);
-			gog_graph_view_handle_event (s->graph_view, (GdkEvent *) event,
-						     item_x * canvas->pixels_per_unit,
-						     item_y * canvas->pixels_per_unit);
-			return TRUE;
-			break;
-
-		default:
-			return FALSE;
-			break;
+	case GDK_BUTTON_PRESS:
+	case GDK_2BUTTON_PRESS:
+	case GDK_MOTION_NOTIFY:
+	case GDK_BUTTON_RELEASE:
+		g_object_get (G_OBJECT(s->sample_graph_item), "x", &item_x, "y", &item_y, NULL);
+		gog_graph_view_handle_event (s->graph_view, (GdkEvent *) event,
+					     item_x * canvas->pixels_per_unit,
+					     item_y * canvas->pixels_per_unit);
+		return TRUE;
+	default:
+		return FALSE;
+		break;
 	}
 }
 
@@ -1242,6 +1241,7 @@ graph_guru_type_selector_new (GraphGuruState *s)
 	g_object_connect (typesel->sample_canvas,
 		"signal::size_allocate", G_CALLBACK (cb_typesel_sample_plot_resize), typesel,
 		NULL);
+	gtk_widget_set_size_request (typesel->sample_canvas, -1, 120);
 	typesel->graph_group = goc_canvas_get_root (GOC_CANVAS (typesel->sample_canvas));
 	gtk_container_add (GTK_CONTAINER (gtk_builder_get_object (gui, "sample-container")), typesel->sample_canvas);
 

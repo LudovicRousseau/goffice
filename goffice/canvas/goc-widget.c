@@ -281,6 +281,8 @@ goc_offscreen_box_size_request (GtkWidget      *widget,
 {
 	GocOffscreenBox *offscreen_box = GOC_OFFSCREEN_BOX (widget);
 
+	requisition->width = requisition->height = 0;
+
 	if (offscreen_box->child
 	    && gtk_widget_get_visible (offscreen_box->child)) {
 		GtkRequisition child_requisition;
@@ -504,6 +506,53 @@ goc_widget_update_bounds (GocItem *item)
 }
 
 static void
+goc_widget_connect_signals (GtkWidget *widget, GocWidget *item,
+			    gboolean do_connect)
+{
+	if (GTK_IS_CONTAINER (widget)) {
+		GList *children = gtk_container_get_children (GTK_CONTAINER (widget));
+		GList *ptr;
+		for (ptr = children; ptr; ptr = ptr->next) {
+			GtkWidget *child = ptr->data;
+			goc_widget_connect_signals (child, item, do_connect);
+		}
+		g_list_free (children);
+	}
+
+	if (do_connect) {
+		g_signal_connect (widget, "enter-notify-event",
+				  G_CALLBACK (enter_notify_cb), item);
+		g_signal_connect (widget, "button-press-event",
+				  G_CALLBACK (button_press_cb), item);
+	} else {
+		g_signal_handlers_disconnect_by_func
+			(widget, G_CALLBACK (enter_notify_cb), item);
+		g_signal_handlers_disconnect_by_func
+			(widget, G_CALLBACK (button_press_cb), item);
+	}
+}
+
+// Get rid of the off-screen box, but keep the reference to the widget, if
+// any.
+static void
+goc_widget_destroy_ofbox (GocWidget *item)
+{
+	if (!item->ofbox)
+		return;
+
+	if (item->widget) {
+		// Remove the widget from the ofbox.  Keep the ref.
+		goc_widget_connect_signals (item->widget, item, FALSE);
+		gtk_container_remove (GTK_CONTAINER (item->ofbox), item->widget);
+	}
+
+	// Destroy the ofbox
+	gtk_widget_destroy (item->ofbox);
+	g_object_unref (item->ofbox);
+	item->ofbox = NULL;
+}
+
+static void
 goc_widget_notify_scrolled (GocItem *item)
 {
 	GocGroup const *parent;
@@ -546,9 +595,6 @@ goc_widget_notify_scrolled (GocItem *item)
 	}
 	y0 = (y0 - item->canvas->scroll_y1) * item->canvas->pixels_per_unit;
 	y1 = (y1 - item->canvas->scroll_y1) * item->canvas->pixels_per_unit;
-	goc_offscreen_box_set_scale (GOC_OFFSCREEN_BOX (widget->ofbox),
-	                             item->canvas->pixels_per_unit * widget->scale);
-	gtk_widget_set_size_request (widget->ofbox, go_fake_floor (x1 - x0), go_fake_floor (y1 - y0));
 	/* ensure we don't wrap throught he infinite */
 	if (x0 < G_MININT)
 		x0 = G_MININT;
@@ -558,58 +604,55 @@ goc_widget_notify_scrolled (GocItem *item)
 		y0 = G_MININT;
 	else if (y1 > G_MAXINT)
 		y0 -= y1 - G_MAXINT;
-	gtk_layout_move (GTK_LAYOUT (item->canvas), widget->ofbox, x0, y0);
+	if (x1 >= 0 && x0 <= item->canvas->width && y1 >= 0 && y0 <= item->canvas->height) {
+		if (widget->ofbox) {
+			goc_offscreen_box_set_scale (GOC_OFFSCREEN_BOX (widget->ofbox),
+					                     item->canvas->pixels_per_unit * widget->scale);
+			gtk_widget_set_size_request (widget->ofbox, go_fake_floor (x1 - x0), go_fake_floor (y1 - y0));
+			gtk_layout_move (GTK_LAYOUT (item->canvas), widget->ofbox, x0, y0);
+		} else {
+			gtk_widget_show (widget->widget);
+			widget->ofbox = GTK_WIDGET (g_object_new (GOC_TYPE_OFFSCREEN_BOX, NULL));
+			gtk_container_add (GTK_CONTAINER (widget->ofbox), widget->widget);
+			gtk_widget_show (widget->ofbox);
+			g_object_ref (widget->ofbox);
+			goc_offscreen_box_set_scale (GOC_OFFSCREEN_BOX (widget->ofbox),
+					                     item->canvas->pixels_per_unit * widget->scale);
+			gtk_widget_set_size_request (widget->ofbox, go_fake_floor (x1 - x0), go_fake_floor (y1 - y0));
+			gtk_layout_put (GTK_LAYOUT (item->canvas),
+			                widget->ofbox, x0, y0);
+			/* we need to propagate some signals to the parent item */
+			goc_widget_connect_signals (widget->widget, widget, TRUE);
+		}
+	} else {
+		goc_widget_destroy_ofbox (widget);
+	}
+}
+
+static void
+goc_widget_realize (GocItem *item)
+{
+	goc_widget_notify_scrolled (item);
+	widget_parent_class->realize (item);
 }
 
 static void
 cb_canvas_changed (GocWidget *item, G_GNUC_UNUSED GParamSpec *pspec,
 		   G_GNUC_UNUSED gpointer user)
 {
-	GtkWidget *parent, *w = item->ofbox;
+	GtkWidget *parent, *box = item->ofbox;
 	GocItem *gitem = (GocItem *)item;
 
-	if (!w || !GTK_IS_WIDGET (w))
+	if (!box)
 		return;
 
-	parent = gtk_widget_get_parent (w);
+	parent = gtk_widget_get_parent (box);
 	if (parent == (GtkWidget *)gitem->canvas)
 		return;
 
-	g_object_ref (w);
-	if (parent)
-		gtk_container_remove (GTK_CONTAINER (parent), w);
-	if (gitem->canvas)
-		gtk_layout_put (GTK_LAYOUT (gitem->canvas), w,
-				item->x, item->y);
+	goc_widget_destroy_ofbox (item);
+
 	goc_widget_notify_scrolled (GOC_ITEM (item));
-	g_object_unref (w);
-}
-
-static void
-goc_widget_connect_signals (GtkWidget *widget, GocWidget *item,
-			    gboolean do_connect)
-{
-		if (GTK_IS_CONTAINER (widget)) {
-			GList *children = gtk_container_get_children (GTK_CONTAINER (widget));
-			GList *ptr;
-			for (ptr = children; ptr; ptr = ptr->next) {
-				GtkWidget *child = ptr->data;
-				goc_widget_connect_signals (child, item, do_connect);
-			}
-			g_list_free (children);
-		}
-
-		if (do_connect) {
-			g_signal_connect (widget, "enter-notify-event",
-					  G_CALLBACK (enter_notify_cb), item);
-			g_signal_connect (widget, "button-press-event",
-					  G_CALLBACK (button_press_cb), item);
-		} else {
-			g_signal_handlers_disconnect_by_func
-				(widget, G_CALLBACK (enter_notify_cb), item);
-			g_signal_handlers_disconnect_by_func
-				(widget, G_CALLBACK (button_press_cb), item);
-		}
 }
 
 static void
@@ -618,35 +661,15 @@ goc_widget_set_widget (GocWidget *item, GtkWidget *widget)
 	if (widget == item->widget)
 		return;
 
-	if (item->ofbox) {
-		GtkWidget *parent = gtk_widget_get_parent (item->ofbox);
-
-		goc_widget_connect_signals (item->widget, item, FALSE);
-
-		if (parent)
-			gtk_container_remove (GTK_CONTAINER (parent),
-					      item->ofbox);
-
-		g_object_unref (item->ofbox);
-		item->ofbox = NULL;
+	goc_widget_destroy_ofbox (item);
+	if (item->widget)
 		g_object_unref (item->widget);
-	}
 
 	item->widget = widget;
 
 	if (widget) {
 		g_object_ref (widget);
-		gtk_widget_show (widget);
-		item->ofbox = GTK_WIDGET (g_object_new (GOC_TYPE_OFFSCREEN_BOX, NULL));
-		gtk_container_add (GTK_CONTAINER (item->ofbox), widget);
-		gtk_widget_show (item->ofbox);
-		g_object_ref (item->ofbox);
-		if (GOC_ITEM (item)->canvas)
-			gtk_layout_put (GTK_LAYOUT (GOC_ITEM (item)->canvas),
-					item->ofbox, item->x, item->y);
 		goc_widget_notify_scrolled (GOC_ITEM (item));
-		/* we need to propagate some signals to the parent item */
-		goc_widget_connect_signals (widget, item, TRUE);
 	}
 }
 
@@ -685,7 +708,6 @@ goc_widget_set_property (GObject *obj, guint param_id,
 		goc_item_bounds_changed (GOC_ITEM (item));
 		goc_widget_notify_scrolled (GOC_ITEM (item));
 	}
-
 }
 
 static void
@@ -749,6 +771,9 @@ goc_widget_draw (GocItem const *item, cairo_t *cr)
 	GocWidget *widget = GOC_WIDGET (item);
 	GocOffscreenBox *ofbox = GOC_OFFSCREEN_BOX (widget->ofbox);
 	int x, y;
+
+	if (!widget->ofbox)
+		return; /* the widget has no allocation */
 	gtk_container_child_get (GTK_CONTAINER (item->canvas), widget->ofbox,
 	                         "x", &x, "y", &y, NULL);
 	cairo_save (cr);
@@ -830,6 +855,7 @@ goc_widget_class_init (GocItemClass *item_klass)
 	item_klass->update_bounds = goc_widget_update_bounds;
 	item_klass->notify_scrolled = goc_widget_notify_scrolled;
 	item_klass->get_window = goc_widget_get_window;
+	item_klass->realize = goc_widget_realize;
 }
 
 GSF_CLASS (GocWidget, goc_widget,

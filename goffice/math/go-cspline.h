@@ -45,13 +45,15 @@ typedef enum {
 
 GType go_cspline_get_type (void);
 GOCSpline *go_cspline_init (double const *x, double const *y, int n,
-				   unsigned limits, double c0, double cn);
+			    unsigned limits, double c0, double cn);
 void go_cspline_destroy (GOCSpline *sp);
 double go_cspline_get_value (GOCSpline const *sp, double x);
 double go_cspline_get_deriv (GOCSpline const *sp, double x);
 double *go_cspline_get_values (GOCSpline const *sp, double const *x, int n);
 double *go_cspline_get_derivs (GOCSpline const *sp, double const *x, int n);
 double *go_cspline_get_integrals (GOCSpline const *sp, double const *x, int n);
+
+// -----------------------------------------------------------------------------
 
 #ifdef GOFFICE_WITH_LONG_DOUBLE
 typedef struct _GOCSplinel GOCSplinel;
@@ -64,7 +66,7 @@ struct _GOCSplinel {
 
 GType go_csplinel_get_type (void);
 GOCSplinel *go_cspline_initl (long double const *x, long double const *y, int n,
-			      unsigned limits, long double a0, long double a1);
+			      unsigned limits, long double c0, long double cn);
 void go_cspline_destroyl (GOCSplinel *sp);
 long double go_cspline_get_valuel (GOCSplinel const *sp, long double x);
 long double go_cspline_get_derivl (GOCSplinel const *sp, long double x);
@@ -72,6 +74,30 @@ long double *go_cspline_get_valuesl (GOCSplinel const *sp, long double const *x,
 long double *go_cspline_get_derivsl (GOCSplinel const *sp, long double const *x, int n);
 long double *go_cspline_get_integralsl (GOCSplinel const *sp, long double const *x, int n);
 #endif
+
+// -----------------------------------------------------------------------------
+
+#ifdef GOFFICE_WITH_DECIMAL64
+typedef struct _GOCSplineD GOCSplineD;
+struct _GOCSplineD {
+	_Decimal64 const *x, *y;
+	_Decimal64 *a, *b, *c;
+	int n;
+	unsigned int ref_count;
+};
+
+GType go_csplineD_get_type (void);
+GOCSplineD *go_cspline_initD (_Decimal64 const *x, _Decimal64 const *y, int n,
+			      unsigned limits, _Decimal64 c0, _Decimal64 cn);
+void go_cspline_destroyD (GOCSplineD *sp);
+_Decimal64 go_cspline_get_valueD (GOCSplineD const *sp, _Decimal64 x);
+_Decimal64 go_cspline_get_derivD (GOCSplineD const *sp, _Decimal64 x);
+_Decimal64 *go_cspline_get_valuesD (GOCSplineD const *sp, _Decimal64 const *x, int n);
+_Decimal64 *go_cspline_get_derivsD (GOCSplineD const *sp, _Decimal64 const *x, int n);
+_Decimal64 *go_cspline_get_integralsD (GOCSplineD const *sp, _Decimal64 const *x, int n);
+#endif
+
+// -----------------------------------------------------------------------------
 
 G_END_DECLS
 

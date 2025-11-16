@@ -86,6 +86,8 @@
 /**
  * GogSeriesDesc:
  * @dim: dimensions descriptions.
+ * @style_fields: the style fields that are meaningful for series.
+ * @num_dim: number of dimensions for series.
  **/
 
 /**
@@ -374,7 +376,7 @@ role_series_labels_can_add (GogObject const *parent)
 {
 	GogSeries *series = GOG_SERIES (parent);
 
-	return (series->allowed_pos != 0 && gog_object_get_child_by_name (parent, "Data labels") == NULL);
+	return (series->allowed_pos != 0);
 }
 
 static void
@@ -963,6 +965,7 @@ gog_series_dataset_dim_changed (GogDataset *set, int dim_i)
 			? go_data_get_scalar_string (name_src) : NULL;
 		gog_object_set_name (GOG_OBJECT (set), name, NULL);
 	}
+	gog_series_check_validity (series);
 }
 
 static void
@@ -1024,8 +1027,9 @@ gog_series_check_validity (GogSeries *series)
 
 	desc = &series->plot->desc.series;
 	for (i = series->plot->desc.series.num_dim; i-- > 0; )
-		if (series->values[i].data == NULL &&
-		    desc->dim[i].priority == GOG_SERIES_REQUIRED) {
+		if (desc->dim[i].priority == GOG_SERIES_REQUIRED && (
+		      series->values[i].data == NULL ||
+		      !go_data_has_value (series->values[i].data))) {
 			series->is_valid = FALSE;
 			return;
 		}
@@ -1036,7 +1040,7 @@ gog_series_check_validity (GogSeries *series)
  * gog_series_has_legend:
  * @series: #GogSeries
  *
- * Returns: TRUE if the series has a visible legend entry
+ * Returns: %TRUE if the series has a visible legend entry
  **/
 gboolean
 gog_series_has_legend (GogSeries const *series)
