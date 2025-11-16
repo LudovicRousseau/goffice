@@ -1,0 +1,63 @@
+name: Windows
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            autoconf
+            automake
+            gtk-doc
+            intltool
+            libtool
+            make
+            pkg-config
+            zip
+          pacboy: >-
+            cairo:p
+            gcc:p
+            gtkmm3:p
+            libgsf:p
+            libxml2:p
+            libxslt:p
+            ntldd:p
+            pango:p
+
+      - uses: actions/checkout@v4
+
+      - name: compile
+        run: |
+          ./autogen.sh
+
+          ./configure --prefix /tmp/inst
+
+          v=$(grep GOFFICE_VERSION goffice/goffice-config.h | cut -f2 -d '"')
+          v="$v-$(date +'%Y.%m.%d-%H')"
+          echo "Version: $v"
+
+          time make --jobs=4
+          time make install
+
+          fn="goffice-64bit-$v-archive.zip"
+
+          zip -9r $fn /tmp/inst/*
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          path: goffice-*.zip
+
