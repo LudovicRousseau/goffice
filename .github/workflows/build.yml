@@ -44,7 +44,7 @@ jobs:
         run: |
           ./autogen.sh
 
-          ./configure --prefix /tmp/inst
+          ./configure --without-long-double --prefix /tmp/inst
 
           v=$(grep GOFFICE_VERSION goffice/goffice-config.h | cut -f2 -d '"')
           v="$v-$(date +'%Y.%m.%d-%H')"
