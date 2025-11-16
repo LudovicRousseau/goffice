@@ -21,6 +21,7 @@ jobs:
           install: >-
             autoconf
             automake
+            gettext-devel
             gtk-doc
             intltool
             libtool
